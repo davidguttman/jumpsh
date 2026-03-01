@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= project.name %> - Localhaus</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1><a href="/">🏠 Localhaus</a></h1>
+  </header>
+
+  <main>
+    <div class="project-detail">
+      <div class="project-header">
+        <h2><%= project.name %></h2>
+        <span class="status-badge <%= project.status %>"><%= project.status %></span>
+      </div>
+
+      <div class="project-info">
+        <p><strong>Path:</strong> <code><%= project.path %></code></p>
+        <p><strong>Subdomain:</strong> 
+          <% if (project.status === 'running') { %>
+            <a href="http://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
+              <%= project.subdomain %>.<%= config.domain %>
+            </a>
+          <% } else { %>
+            <%= project.subdomain %>.<%= config.domain %>
+          <% } %>
+        </p>
+        <% if (project.port) { %>
+          <p><strong>Port:</strong> <%= project.port %></p>
+        <% } %>
+        <% if (project.description) { %>
+          <p><strong>Description:</strong> <%= project.description %></p>
+        <% } %>
+      </div>
+
+      <div class="project-actions">
+        <% if (project.status === 'running') { %>
+          <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
+          <button class="btn" onclick="restartProject(<%= project.id %>)">Restart</button>
+        <% } else { %>
+          <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
+        <% } %>
+        <button class="btn btn-danger-outline" onclick="deleteProject(<%= project.id %>)">Delete</button>
+      </div>
+
+      <% if (worktrees.length > 0) { %>
+        <div class="worktrees-section">
+          <h3>Worktrees (<%= worktrees.length %>)</h3>
+          <table class="worktrees-table">
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const wt of worktrees) { %>
+                <tr>
+                  <td><code><%= wt.branch_name %></code></td>
+                  <td>
+                    <% if (wt.status === 'running') { %>
+                      <a href="http://<%= wt.subdomain %>.<%= config.domain %>" target="_blank">
+                        <%= wt.subdomain %>.<%= config.domain %>
+                      </a>
+                    <% } else { %>
+                      <%= wt.subdomain %>.<%= config.domain %>
+                    <% } %>
+                  </td>
+                  <td><span class="status-badge <%= wt.status %>"><%= wt.status %></span></td>
+                  <td>
+                    <% if (wt.status === 'running') { %>
+                      <button class="btn btn-sm btn-danger" onclick="stopProject(<%= wt.id %>)">Stop</button>
+                    <% } else { %>
+                      <button class="btn btn-sm btn-success" onclick="startProject(<%= wt.id %>)">Start</button>
+                    <% } %>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <div class="logs-section">
+        <h3>Logs</h3>
+        <div class="logs-toolbar">
+          <button class="btn btn-sm" onclick="refreshLogs()">Refresh</button>
+          <button class="btn btn-sm" onclick="toggleStream()" id="stream-btn">Stream Live</button>
+        </div>
+        <pre id="logs"><%= logs %></pre>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const projectId = <%= project.id %>;
+    let eventSource = null;
+
+    async function startProject(id) {
+      const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
+      if (res.ok) location.reload();
+      else alert('Error starting project');
+    }
+
+    async function stopProject(id) {
+      const res = await fetch(`/projects/${id}/stop`, { method: 'POST' });
+      if (res.ok) location.reload();
+      else alert('Error stopping project');
+    }
+
+    async function restartProject(id) {
+      await stopProject(id);
+      setTimeout(() => startProject(id), 1000);
+    }
+
+    async function deleteProject(id) {
+      if (!confirm('Are you sure you want to delete this project?')) return;
+      const res = await fetch(`/projects/${id}`, { method: 'DELETE' });
+      if (res.ok) location.href = '/';
+      else alert('Error deleting project');
+    }
+
+    async function refreshLogs() {
+      location.reload();
+    }
+
+    function toggleStream() {
+      const btn = document.getElementById('stream-btn');
+      const logsEl = document.getElementById('logs');
+
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        btn.textContent = 'Stream Live';
+        return;
+      }
+
+      btn.textContent = 'Stop Stream';
+      eventSource = new EventSource(`/projects/${projectId}/logs/stream`);
+      
+      eventSource.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.line) {
+          logsEl.textContent += data.line + '\n';
+          logsEl.scrollTop = logsEl.scrollHeight;
+        }
+        if (data.closed) {
+          eventSource.close();
+          eventSource = null;
+          btn.textContent = 'Stream Live';
+        }
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        eventSource = null;
+        btn.textContent = 'Stream Live';
+      };
+    }
+  </script>
+</body>
+</html>

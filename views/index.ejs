@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Localhaus</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1>🏠 Localhaus</h1>
+    <a href="/add" class="btn btn-primary">+ Add Project</a>
+  </header>
+
+  <main>
+    <% if (projects.length === 0) { %>
+      <div class="empty-state">
+        <h2>No projects yet</h2>
+        <p>Add your first project to get started.</p>
+        <a href="/add" class="btn btn-primary">+ Add Project</a>
+      </div>
+    <% } else { %>
+      <div class="project-grid">
+        <% for (const project of projects) { %>
+          <div class="project-card <%= project.status %>">
+            <div class="project-header">
+              <h2><a href="/projects/<%= project.id %>"><%= project.name %></a></h2>
+              <span class="status-badge <%= project.status %>"><%= project.status %></span>
+            </div>
+            
+            <% if (project.description) { %>
+              <p class="description"><%= project.description %></p>
+            <% } %>
+            
+            <div class="project-url">
+              <% if (project.status === 'running') { %>
+                <a href="http://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
+                  <%= project.subdomain %>.<%= config.domain %>
+                </a>
+              <% } else { %>
+                <span class="url-inactive"><%= project.subdomain %>.<%= config.domain %></span>
+              <% } %>
+            </div>
+
+            <div class="project-actions">
+              <% if (project.status === 'running') { %>
+                <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
+              <% } else { %>
+                <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
+              <% } %>
+              <a href="/projects/<%= project.id %>" class="btn">Details</a>
+            </div>
+
+            <% const worktrees = worktreesByParent[project.id] || []; %>
+            <% if (worktrees.length > 0) { %>
+              <div class="worktrees">
+                <h4>Worktrees (<%= worktrees.length %>)</h4>
+                <ul>
+                  <% for (const wt of worktrees) { %>
+                    <li class="<%= wt.status %>">
+                      <span class="branch-name"><%= wt.branch_name %></span>
+                      <% if (wt.status === 'running') { %>
+                        <a href="http://<%= wt.subdomain %>.<%= config.domain %>" target="_blank" class="wt-url">
+                          <%= wt.subdomain %>
+                        </a>
+                      <% } else { %>
+                        <span class="wt-url inactive"><%= wt.subdomain %></span>
+                      <% } %>
+                      <span class="status-dot <%= wt.status %>"></span>
+                    </li>
+                  <% } %>
+                </ul>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    <% } %>
+  </main>
+
+  <script>
+    async function startProject(id) {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      
+      try {
+        const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          const data = await res.json();
+          alert('Error: ' + data.error);
+          btn.disabled = false;
+          btn.textContent = 'Start';
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Start';
+      }
+    }
+
+    async function stopProject(id) {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Stopping...';
+      
+      try {
+        const res = await fetch(`/projects/${id}/stop`, { method: 'POST' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          const data = await res.json();
+          alert('Error: ' + data.error);
+          btn.disabled = false;
+          btn.textContent = 'Stop';
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Stop';
+      }
+    }
+
+    // Auto-refresh every 30 seconds
+    setTimeout(() => location.reload(), 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+localhaus.db
+localhaus.log
+.env
+*.sync-conflict-*
+.DS_Store

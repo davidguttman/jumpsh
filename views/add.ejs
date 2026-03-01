@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Project - Localhaus</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1><a href="/">🏠 Localhaus</a></h1>
+  </header>
+
+  <main>
+    <div class="form-container">
+      <h2>Add Project</h2>
+      
+      <form action="/projects" method="POST">
+        <div class="form-group">
+          <label for="name">Project Name</label>
+          <input type="text" id="name" name="name" required placeholder="my-app">
+          <small>Will be used for subdomain: my-app.<%= config.domain %></small>
+        </div>
+
+        <div class="form-group">
+          <label for="path">Project Path</label>
+          <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app">
+          <small>Absolute path to project directory (must contain docker-compose.yml)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description (optional)</label>
+          <textarea id="description" name="description" rows="3" placeholder="What does this project do?"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <a href="/" class="btn">Cancel</a>
+          <button type="submit" class="btn btn-primary">Add Project</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
