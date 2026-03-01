@@ -1,5 +1,7 @@
 import sqlite3 from 'sqlite3';
 import getPort from 'get-port';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -8,7 +10,9 @@ const __dirname = path.dirname(__filename);
 
 class Database {
   constructor() {
-    const dbPath = path.join(__dirname, 'localhaus.db');
+    const dataDir = path.join(os.homedir(), '.localhaus');
+    fs.mkdirSync(dataDir, { recursive: true });
+    const dbPath = path.join(dataDir, 'localhaus.db');
     this.db = new (sqlite3.verbose().Database)(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err.message);
