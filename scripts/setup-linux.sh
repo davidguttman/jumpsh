@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-linux.sh — Linux setup for localhaus (dnsmasq + mkcert)
-# Installs wildcard DNS for *.localhost and generates TLS certificates.
+# Installs wildcard DNS for *.localhaus and generates TLS certificates.
 # Includes WSL2 detection: skips dnsmasq under WSL2 and provides /etc/hosts guidance.
 
 set -euo pipefail
@@ -106,15 +106,15 @@ install_dnsmasq() {
   # Write consolidated localhost.conf: always bind on 5353 to avoid port 53 conflicts
   # with systemd-resolved. This is safe even without systemd-resolved.
   sudo tee "${dnsmasq_conf}" > /dev/null <<'EOF'
-# localhaus: wildcard DNS for *.localhost
+# localhaus: wildcard DNS for *.localhaus
 # Listens on port 5353 to avoid conflict with systemd-resolved on port 53
 port=5353
 listen-address=127.0.0.1
 bind-interfaces
-address=/.localhost/127.0.0.1
+address=/.localhaus/127.0.0.1
 EOF
   log "ACTION: wrote ${dnsmasq_conf} (port 5353, bind-interfaces)"
-  print_status "Configured dnsmasq for *.localhost on port 5353"
+  print_status "Configured dnsmasq for *.localhaus on port 5353"
 }
 
 # --- systemd-resolved integration ---
@@ -129,13 +129,13 @@ configure_resolved() {
 
   sudo mkdir -p "${resolved_drop_dir}"
   sudo tee "${resolved_conf}" > /dev/null <<'EOF'
-# Added by localhaus setup — forwards .localhost queries to dnsmasq on port 5353
+# Added by localhaus setup — forwards .localhaus queries to dnsmasq on port 5353
 [Resolve]
 DNS=127.0.0.1:5353
-Domains=~localhost
+Domains=~localhaus
 EOF
   log "ACTION: wrote ${resolved_conf} (DNS=127.0.0.1:5353)"
-  print_status "Created/updated systemd-resolved drop-in for .localhost"
+  print_status "Created/updated systemd-resolved drop-in for .localhaus"
 
   # Restart resolved if active
   if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
@@ -182,24 +182,24 @@ verify_dnsmasq_active() {
   # Verify DNS resolution via dnsmasq on 5353
   if command -v dig &>/dev/null; then
     local result
-    result=$(dig +short test.localhost @127.0.0.1 -p 5353 2>/dev/null || true)
+    result=$(dig +short test.localhaus @127.0.0.1 -p 5353 2>/dev/null || true)
     if [[ "${result}" == "127.0.0.1" ]]; then
-      print_status "dig test.localhost @127.0.0.1 -p 5353 → 127.0.0.1"
+      print_status "dig test.localhaus @127.0.0.1 -p 5353 → 127.0.0.1"
     else
       print_warn "dig check returned: '${result}' (expected 127.0.0.1)"
-      echo "  dnsmasq may need a moment. Try: dig test.localhost @127.0.0.1 -p 5353"
+      echo "  dnsmasq may need a moment. Try: dig test.localhaus @127.0.0.1 -p 5353"
     fi
   fi
 
   # Verify system resolver can resolve (via systemd-resolved forwarding)
   if command -v resolvectl &>/dev/null; then
     local result
-    result=$(resolvectl query test.localhost 2>/dev/null | grep -oP '127\.0\.0\.1' | head -1 || true)
+    result=$(resolvectl query test.localhaus 2>/dev/null | grep -oP '127\.0\.0\.1' | head -1 || true)
     if [[ "${result}" == "127.0.0.1" ]]; then
-      print_status "resolvectl query test.localhost → 127.0.0.1 (systemd-resolved forwarding works)"
+      print_status "resolvectl query test.localhaus → 127.0.0.1 (systemd-resolved forwarding works)"
     else
       print_warn "resolvectl check inconclusive"
-      echo "  Try: resolvectl query test.localhost"
+      echo "  Try: resolvectl query test.localhaus"
     fi
   fi
 }
@@ -214,8 +214,8 @@ setup_wsl2() {
   echo ""
   echo "  Instead, add entries to /etc/hosts for each project subdomain:"
   echo ""
-  echo "    127.0.0.1 localhaus.localhost"
-  echo "    127.0.0.1 my-app.localhost"
+  echo "    127.0.0.1 localhaus.localhaus"
+  echo "    127.0.0.1 my-app.localhaus"
   echo ""
   echo "  After adding projects to localhaus, run the helper function below"
   echo "  to sync /etc/hosts with your registered subdomains:"
@@ -223,8 +223,8 @@ setup_wsl2() {
   echo '    localhaus-dns() {'
   echo '      sqlite3 ~/.localhaus/localhaus.db "SELECT subdomain FROM projects" | \'
   echo '        while read -r sub; do'
-  echo '          grep -q "${sub}.localhost" /etc/hosts || \'
-  echo '            echo "127.0.0.1 ${sub}.localhost # localhaus-managed" | sudo tee -a /etc/hosts'
+  echo '          grep -q "${sub}.localhaus" /etc/hosts || \'
+  echo '            echo "127.0.0.1 ${sub}.localhaus # localhaus-managed" | sudo tee -a /etc/hosts'
   echo '        done'
   echo '    }'
   echo ""
@@ -234,12 +234,12 @@ setup_wsl2() {
   log "INFO: user instructed to use /etc/hosts helper"
 
   # Write a base hosts entry for the dashboard (with marker comment for safe teardown)
-  if ! grep -qF "localhaus.localhost" /etc/hosts 2>/dev/null; then
-    echo "127.0.0.1 localhaus.localhost # localhaus-managed" | sudo tee -a /etc/hosts > /dev/null
-    log "ACTION: added localhaus.localhost to /etc/hosts"
-    print_status "Added localhaus.localhost to /etc/hosts"
+  if ! grep -qF "localhaus.localhaus" /etc/hosts 2>/dev/null; then
+    echo "127.0.0.1 localhaus.localhaus # localhaus-managed" | sudo tee -a /etc/hosts > /dev/null
+    log "ACTION: added localhaus.localhaus to /etc/hosts"
+    print_status "Added localhaus.localhaus to /etc/hosts"
   else
-    print_status "localhaus.localhost already in /etc/hosts"
+    print_status "localhaus.localhaus already in /etc/hosts"
   fi
 }
 
@@ -343,7 +343,7 @@ main() {
   print_finish
 
   echo ""
-  echo "  Target UX: https://localhaus.localhost (no port)"
+  echo "  Target UX: https://localhaus.localhaus (no port)"
   echo "  Set LOCALHAUS_PORT=443 and LOCALHAUS_HTTPS=true in .env"
   echo "  On Linux, run: scripts/enable-low-port-bind-linux.sh"
   echo ""

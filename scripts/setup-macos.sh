@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-macos.sh — macOS setup for localhaus (dnsmasq + mkcert)
-# Installs wildcard DNS for *.localhost and generates TLS certificates.
+# Installs wildcard DNS for *.localhaus and generates TLS certificates.
 
 set -euo pipefail
 
@@ -41,7 +41,7 @@ install_dnsmasq() {
   local dnsmasq_conf_dir="${brew_prefix}/etc/dnsmasq.d"
   local dnsmasq_conf="${dnsmasq_conf_dir}/localhost.conf"
   local dnsmasq_main="${brew_prefix}/etc/dnsmasq.conf"
-  local target_line="address=/.localhost/127.0.0.1"
+  local target_line="address=/.localhaus/127.0.0.1"
 
   # Ensure dnsmasq.d include exists in main config
   mkdir -p "${dnsmasq_conf_dir}"
@@ -54,11 +54,11 @@ install_dnsmasq() {
 
   # Write localhost.conf
   if [[ -f "${dnsmasq_conf}" ]] && grep -qF "${target_line}" "${dnsmasq_conf}"; then
-    print_status "dnsmasq already configured for *.localhost"
+    print_status "dnsmasq already configured for *.localhaus"
   else
     echo "${target_line}" > "${dnsmasq_conf}"
     log "ACTION: wrote ${dnsmasq_conf}"
-    print_status "Configured dnsmasq for *.localhost"
+    print_status "Configured dnsmasq for *.localhaus"
   fi
 
   # Restart dnsmasq
@@ -72,7 +72,7 @@ install_dnsmasq() {
 setup_resolver() {
   print_header "Setting up macOS resolver"
 
-  local resolver_file="/etc/resolver/localhost"
+  local resolver_file="/etc/resolver/localhaus"
 
   if [[ -f "${resolver_file}" ]] && grep -qF "nameserver 127.0.0.1" "${resolver_file}"; then
     print_status "Resolver already configured at ${resolver_file}"
@@ -118,8 +118,8 @@ main() {
   print_finish
 
   echo ""
-  echo "  Target UX: https://localhaus.localhost (no port)"
-  echo "               https://<project>.localhost"
+  echo "  Target UX: https://localhaus.localhaus (no port)"
+  echo "               https://<project>.localhaus"
   echo "  Set LOCALHAUS_PORT=443 and LOCALHAUS_HTTPS=true in .env"
   echo ""
 

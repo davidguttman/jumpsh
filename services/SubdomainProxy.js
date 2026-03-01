@@ -63,7 +63,7 @@ class SubdomainProxy {
     const hostWithoutPort = host.split(':')[0];
     const parts = hostWithoutPort.split('.');
     
-    // For localhost-style domains (project.localhost)
+    // For subdomain-style domains (project.localhaus)
     if (parts.length >= 2) {
       return parts[0];
     }

@@ -95,7 +95,7 @@ generate_certs() {
   mkcert \
     -cert-file "${CERT_FILE}" \
     -key-file "${KEY_FILE}" \
-    "*.localhost" localhost 127.0.0.1 ::1 \
+    "*.localhaus" localhaus localhost 127.0.0.1 ::1 \
     2>&1 | while IFS= read -r line; do log "mkcert: ${line}"; done
 
   if [[ -f "${CERT_FILE}" && -f "${KEY_FILE}" ]]; then
@@ -113,7 +113,7 @@ generate_certs() {
 verify_dns() {
   print_header "Verifying DNS resolution"
 
-  local test_host="test.localhost"
+  local test_host="test.localhaus"
 
   # Try dig first
   if command -v dig &>/dev/null; then
@@ -136,8 +136,8 @@ verify_dns() {
   fi
 
   print_warn "Could not verify DNS for ${test_host}."
-  print_warn "This may be normal — browsers resolve *.localhost natively (RFC 6761)."
-  print_warn "System tools (curl, wget) may need dnsmasq running."
+  print_warn ".localhaus requires dnsmasq — ensure it is running."
+  print_warn "Try: dig test.localhaus @127.0.0.1"
   return 0
 }
 

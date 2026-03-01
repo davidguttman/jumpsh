@@ -32,7 +32,7 @@ const certPath = resolvePath(
 // Config
 const config = {
   port: parseInt(process.env.LOCALHAUS_PORT, 10) || 5050,
-  domain: process.env.LOCALHAUS_DOMAIN || 'localhost',
+  domain: process.env.LOCALHAUS_DOMAIN || 'localhaus',
   https: process.env.LOCALHAUS_HTTPS === 'true',
   certPath
 };
