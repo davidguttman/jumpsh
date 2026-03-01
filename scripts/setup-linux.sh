@@ -80,81 +80,76 @@ install_dnsmasq() {
     print_status "dnsmasq installed"
   fi
 
+  local dnsmasq_main="/etc/dnsmasq.conf"
   local dnsmasq_conf_dir="/etc/dnsmasq.d"
   local dnsmasq_conf="${dnsmasq_conf_dir}/localhost.conf"
-  local target_line="address=/.localhost/127.0.0.1"
 
   sudo mkdir -p "${dnsmasq_conf_dir}"
 
-  if [[ -f "${dnsmasq_conf}" ]] && grep -qF "${target_line}" "${dnsmasq_conf}"; then
-    print_status "dnsmasq already configured for *.localhost"
+  # Ensure /etc/dnsmasq.conf includes the conf-dir directive
+  local include_line="conf-dir=${dnsmasq_conf_dir}/,*.conf"
+  if [[ -f "${dnsmasq_main}" ]]; then
+    # Check for active (non-commented) conf-dir line
+    if grep -qE "^conf-dir=${dnsmasq_conf_dir}" "${dnsmasq_main}" 2>/dev/null; then
+      print_status "dnsmasq.conf already includes ${dnsmasq_conf_dir}"
+    else
+      echo "${include_line}" | sudo tee -a "${dnsmasq_main}" > /dev/null
+      log "ACTION: appended conf-dir include to ${dnsmasq_main}"
+      print_status "Added conf-dir include to ${dnsmasq_main}"
+    fi
   else
-    echo "${target_line}" | sudo tee "${dnsmasq_conf}" > /dev/null
-    log "ACTION: wrote ${dnsmasq_conf}"
-    print_status "Configured dnsmasq for *.localhost"
+    echo "${include_line}" | sudo tee "${dnsmasq_main}" > /dev/null
+    log "ACTION: created ${dnsmasq_main} with conf-dir include"
+    print_status "Created ${dnsmasq_main} with conf-dir include"
   fi
+
+  # Write consolidated localhost.conf: always bind on 5353 to avoid port 53 conflicts
+  # with systemd-resolved. This is safe even without systemd-resolved.
+  sudo tee "${dnsmasq_conf}" > /dev/null <<'EOF'
+# localhaus: wildcard DNS for *.localhost
+# Listens on port 5353 to avoid conflict with systemd-resolved on port 53
+port=5353
+listen-address=127.0.0.1
+bind-interfaces
+address=/.localhost/127.0.0.1
+EOF
+  log "ACTION: wrote ${dnsmasq_conf} (port 5353, bind-interfaces)"
+  print_status "Configured dnsmasq for *.localhost on port 5353"
 }
 
 # --- systemd-resolved integration ---
 
 configure_resolved() {
-  # If systemd-resolved is running, configure it to forward .localhost to dnsmasq
-  if ! systemctl is-active --quiet systemd-resolved 2>/dev/null; then
-    return 0
-  fi
-
   print_header "Configuring systemd-resolved"
 
+  # Always write the resolved drop-in, even if resolved isn't currently active.
+  # This makes the setup idempotent and correct if resolved gets enabled later.
   local resolved_drop_dir="/etc/systemd/resolved.conf.d"
   local resolved_conf="${resolved_drop_dir}/localhaus.conf"
 
-  if [[ -f "${resolved_conf}" ]]; then
-    print_status "systemd-resolved drop-in already exists"
-  else
-    sudo mkdir -p "${resolved_drop_dir}"
-    sudo tee "${resolved_conf}" > /dev/null <<'EOF'
-# Added by localhaus setup — forwards .localhost queries to dnsmasq
-[Resolve]
-DNS=127.0.0.1
-Domains=~localhost
-EOF
-    log "ACTION: wrote ${resolved_conf}"
-    print_status "Created systemd-resolved drop-in for .localhost"
-  fi
-
-  # Check if dnsmasq needs to listen on an alternate port (53 may be taken by resolved stub)
-  if ss -tlnp 2>/dev/null | grep -q ':53 .*systemd-resolve'; then
-    # Configure dnsmasq to bind on a different port and have resolved forward to it
-    local dnsmasq_port_conf="/etc/dnsmasq.d/localhaus-port.conf"
-    if [[ ! -f "${dnsmasq_port_conf}" ]]; then
-      sudo tee "${dnsmasq_port_conf}" > /dev/null <<'EOF'
-# localhaus: dnsmasq listens on 5353 to avoid conflict with systemd-resolved stub
-port=5353
-listen-address=127.0.0.1
-bind-interfaces
-EOF
-      log "ACTION: wrote ${dnsmasq_port_conf} (port 5353)"
-
-      # Update resolved drop-in to point to port 5353
-      sudo tee "${resolved_conf}" > /dev/null <<'EOF'
+  sudo mkdir -p "${resolved_drop_dir}"
+  sudo tee "${resolved_conf}" > /dev/null <<'EOF'
 # Added by localhaus setup — forwards .localhost queries to dnsmasq on port 5353
 [Resolve]
 DNS=127.0.0.1:5353
 Domains=~localhost
 EOF
-      log "ACTION: updated ${resolved_conf} to use port 5353"
-      print_status "Configured dnsmasq on port 5353 (systemd-resolved on 53)"
-    else
-      print_status "dnsmasq port config already exists"
-    fi
-  fi
+  log "ACTION: wrote ${resolved_conf} (DNS=127.0.0.1:5353)"
+  print_status "Created/updated systemd-resolved drop-in for .localhost"
 
-  log "ACTION: restarting systemd-resolved"
-  sudo systemctl restart systemd-resolved
-  print_status "systemd-resolved restarted"
+  # Restart resolved if active
+  if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+    log "ACTION: restarting systemd-resolved"
+    sudo systemctl restart systemd-resolved
+    print_status "systemd-resolved restarted"
+  else
+    print_status "systemd-resolved not active — drop-in written for future use"
+  fi
 }
 
 restart_dnsmasq() {
+  print_header "Starting dnsmasq"
+
   log "ACTION: restarting dnsmasq"
   if systemctl is-enabled dnsmasq &>/dev/null 2>&1; then
     sudo systemctl restart dnsmasq
@@ -162,6 +157,51 @@ restart_dnsmasq() {
     sudo systemctl enable --now dnsmasq
   fi
   print_status "dnsmasq restarted"
+}
+
+verify_dnsmasq_active() {
+  print_header "Verifying dnsmasq"
+
+  # Check dnsmasq is active
+  if systemctl is-active --quiet dnsmasq 2>/dev/null; then
+    print_status "dnsmasq service is active"
+  else
+    print_error "dnsmasq service is NOT active"
+    echo "  Run: sudo systemctl status dnsmasq"
+    return 1
+  fi
+
+  # Check dnsmasq is listening on 5353
+  if ss -tlnp 2>/dev/null | grep -q ':5353 '; then
+    print_status "dnsmasq is listening on port 5353"
+  else
+    print_warn "Cannot confirm dnsmasq listening on port 5353 (ss check)"
+    echo "  This may be normal if ss lacks permissions. Try: sudo ss -tlnp | grep 5353"
+  fi
+
+  # Verify DNS resolution via dnsmasq on 5353
+  if command -v dig &>/dev/null; then
+    local result
+    result=$(dig +short test.localhost @127.0.0.1 -p 5353 2>/dev/null || true)
+    if [[ "${result}" == "127.0.0.1" ]]; then
+      print_status "dig test.localhost @127.0.0.1 -p 5353 → 127.0.0.1"
+    else
+      print_warn "dig check returned: '${result}' (expected 127.0.0.1)"
+      echo "  dnsmasq may need a moment. Try: dig test.localhost @127.0.0.1 -p 5353"
+    fi
+  fi
+
+  # Verify system resolver can resolve (via systemd-resolved forwarding)
+  if command -v resolvectl &>/dev/null; then
+    local result
+    result=$(resolvectl query test.localhost 2>/dev/null | grep -oP '127\.0\.0\.1' | head -1 || true)
+    if [[ "${result}" == "127.0.0.1" ]]; then
+      print_status "resolvectl query test.localhost → 127.0.0.1 (systemd-resolved forwarding works)"
+    else
+      print_warn "resolvectl check inconclusive"
+      echo "  Try: resolvectl query test.localhost"
+    fi
+  fi
 }
 
 # --- WSL2 workaround ---
@@ -290,6 +330,7 @@ main() {
     install_dnsmasq
     configure_resolved
     restart_dnsmasq
+    verify_dnsmasq_active
   fi
 
   install_mkcert
@@ -300,6 +341,12 @@ main() {
   fi
 
   print_finish
+
+  echo ""
+  echo "  Target UX: https://localhaus.localhost (no port)"
+  echo "  Set LOCALHAUS_PORT=443 and LOCALHAUS_HTTPS=true in .env"
+  echo "  On Linux, run: scripts/enable-low-port-bind-linux.sh"
+  echo ""
 
   log "Linux setup complete"
 }

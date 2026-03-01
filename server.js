@@ -31,11 +31,23 @@ const certPath = resolvePath(
 
 // Config
 const config = {
-  port: process.env.LOCALHAUS_PORT || 5050,
+  port: parseInt(process.env.LOCALHAUS_PORT, 10) || 5050,
   domain: process.env.LOCALHAUS_DOMAIN || 'localhost',
   https: process.env.LOCALHAUS_HTTPS === 'true',
   certPath
 };
+
+/**
+ * Format a URL, omitting the port when it's the default for the protocol
+ * (443 for HTTPS, 80 for HTTP).
+ */
+function formatUrl(host, pathStr = '') {
+  const proto = config.https ? 'https' : 'http';
+  const defaultPort = config.https ? 443 : 80;
+  const portSuffix = config.port === defaultPort ? '' : `:${config.port}`;
+  return `${proto}://${host}${portSuffix}${pathStr}`;
+}
+config.formatUrl = formatUrl;
 
 // Initialize services
 const db = new Database();
@@ -268,14 +280,15 @@ if (config.https) {
 }
 
 const protocol = config.https ? 'https' : 'http';
+const dashboardUrl = formatUrl(`localhaus.${config.domain}`);
 
 server.listen(config.port, () => {
   console.log(`
 ╔═══════════════════════════════════════════╗
 ║           🏠 Localhaus v0.1.0             ║
 ╠═══════════════════════════════════════════╣
-║  Dashboard: ${protocol}://${config.domain}:${config.port}
-║  Domain:    *.${config.domain}
+║  Dashboard: ${dashboardUrl}
+║  Projects:  ${formatUrl(`*.${config.domain}`)}
 ║  Protocol:  ${protocol.toUpperCase()}
 ╚═══════════════════════════════════════════╝
   `);

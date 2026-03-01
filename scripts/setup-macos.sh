@@ -117,6 +117,12 @@ main() {
   verify_dns
   print_finish
 
+  echo ""
+  echo "  Target UX: https://localhaus.localhost (no port)"
+  echo "               https://<project>.localhost"
+  echo "  Set LOCALHAUS_PORT=443 and LOCALHAUS_HTTPS=true in .env"
+  echo ""
+
   log "macOS setup complete"
 }
 

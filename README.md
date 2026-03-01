@@ -20,11 +20,17 @@ git clone https://github.com/localhaus/localhaus
 cd localhaus
 npm install
 
+# Setup DNS + HTTPS certs (one-time)
+scripts/setup-macos.sh   # or setup-linux.sh
+
+# Configure
+cp .env.example .env
+
 # Run
 npm run dev
 
 # Open dashboard
-open http://localhost:5050
+open https://localhaus.localhost
 ```
 
 ## Requirements
@@ -80,27 +86,43 @@ mkcert "*.localhost" localhost 127.0.0.1
 Copy `.env.example` to `.env`:
 
 ```env
-LOCALHAUS_PORT=5050
+LOCALHAUS_HTTPS=true
+LOCALHAUS_PORT=443
 LOCALHAUS_DOMAIN=localhost
-LOCALHAUS_HTTPS=false
+LOCALHAUS_CERT_PATH=~/.localhaus/certs
 ```
+
+### No-Port HTTPS (Recommended)
+
+For clean URLs like `https://localhaus.localhost` and `https://my-app.localhost`:
+
+1. Run the setup script for your platform:
+   ```bash
+   scripts/setup-macos.sh   # macOS
+   scripts/setup-linux.sh   # Linux
+   ```
+
+2. Set `LOCALHAUS_HTTPS=true` and `LOCALHAUS_PORT=443` in `.env`.
+
+3. **Linux only:** Node.js needs permission to bind port 443:
+   ```bash
+   scripts/enable-low-port-bind-linux.sh
+   ```
+   This runs `setcap cap_net_bind_service=+ep` on the node binary (requires sudo).
+   macOS does not need this step.
+
+4. If you prefer not to use a privileged port, set `LOCALHAUS_PORT=5050` instead.
+   URLs will include the port: `https://localhaus.localhost:5050`.
 
 ## Project Setup
 
-Each project needs a `docker-compose.yml`:
+Each project needs a `docker-compose.yml`, or localhaus will auto-generate one:
 
-```yaml
-services:
-  app:
-    build: .
-    ports:
-      - "3000"  # Localhaus will discover this port
-    volumes:
-      - .:/app
-      - /app/node_modules
-```
+- **Node.js** — detects `package.json`, package manager (npm/yarn/pnpm/bun), framework (vite/next/nuxt)
+- **Python** — detects `requirements.txt` or `pyproject.toml`, framework (FastAPI/Flask/Django)
+- **Manual** — provide your own `docker-compose.yml` for full control
 
-If your project doesn't have a Dockerfile, auto-generation via nixpacks is coming soon.
+Auto-generated files live in `.localhaus/` inside your project directory.
 
 ## Worktrees
 

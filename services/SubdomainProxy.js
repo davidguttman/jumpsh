@@ -22,13 +22,14 @@ class SubdomainProxy {
       // Find project by subdomain
       this.db.getProjectBySubdomain(subdomain, async (err, project) => {
         if (err || !project) {
+          const homeUrl = this.config.formatUrl(`localhaus.${this.config.domain}`);
           return res.status(404).send(`
             <html>
               <head><title>Project Not Found</title></head>
               <body style="font-family: system-ui; padding: 40px; text-align: center;">
                 <h1>404 - Project Not Found</h1>
                 <p>No project registered for subdomain: <strong>${subdomain}</strong></p>
-                <a href="${this.config.https ? 'https' : 'http'}://${this.config.domain}:${this.config.port}">← Back to Localhaus</a>
+                <a href="${homeUrl}">← Back to Localhaus</a>
               </body>
             </html>
           `);
@@ -37,13 +38,14 @@ class SubdomainProxy {
         // Get the container's port
         const port = await this.docker.getPort(project);
         if (!port) {
+          const projectUrl = this.config.formatUrl(`localhaus.${this.config.domain}`, `/projects/${project.id}`);
           return res.status(503).send(`
             <html>
               <head><title>Project Not Running</title></head>
               <body style="font-family: system-ui; padding: 40px; text-align: center;">
                 <h1>503 - Project Not Running</h1>
                 <p><strong>${project.name}</strong> is not currently running.</p>
-                <a href="${this.config.https ? 'https' : 'http'}://${this.config.domain}:${this.config.port}/projects/${project.id}">Start Project</a>
+                <a href="${projectUrl}">Start Project</a>
               </body>
             </html>
           `);
