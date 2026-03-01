@@ -8,16 +8,24 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["dev", "local", "docker", "dashboard", "proxy", "subdomain"],
+  "keywords": [
+    "dev",
+    "local",
+    "docker",
+    "dashboard",
+    "proxy",
+    "subdomain"
+  ],
   "author": "David Guttman",
   "license": "MIT",
   "dependencies": {
     "dotenv": "^17.0.0",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
+    "get-port": "^7.1.0",
     "http-proxy-middleware": "^3.0.0",
-    "sqlite3": "^5.1.6",
-    "slugify": "^1.6.6"
+    "slugify": "^1.6.6",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

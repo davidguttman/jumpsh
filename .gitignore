@@ -4,3 +4,4 @@ localhaus.log
 .env
 *.sync-conflict-*
 .DS_Store
+.development-state.json

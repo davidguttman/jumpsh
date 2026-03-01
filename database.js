@@ -1,4 +1,5 @@
 import sqlite3 from 'sqlite3';
+import getPort from 'get-port';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -30,10 +31,58 @@ class Database {
         parent_project_id INTEGER REFERENCES projects(id),
         is_worktree BOOLEAN DEFAULT 0,
         branch_name TEXT,
+        assigned_port INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: add assigned_port if table already exists without it
+    this.db.run('ALTER TABLE projects ADD COLUMN assigned_port INTEGER', () => {
+      // Silently ignore "duplicate column" error
+    });
+  }
+
+  // Port allocation: prefer deterministic range starting at 10000,
+  // exclude DB-assigned ports, let get-port verify host availability.
+  static PORT_RANGE_START = 10000;
+  static PORT_RANGE_END = 10999;
+
+  getNextPort(callback) {
+    this.db.all(
+      'SELECT assigned_port FROM projects WHERE assigned_port IS NOT NULL ORDER BY assigned_port',
+      async (err, rows) => {
+        if (err) return callback(err);
+
+        const usedPorts = new Set((rows || []).map(r => r.assigned_port));
+        // Build exclude set: DB-assigned ports
+        const exclude = new Set(usedPorts);
+
+        try {
+          const port = await getPort({
+            port: this.constructor.makePortRange(usedPorts),
+            exclude,
+          });
+          if (port < this.constructor.PORT_RANGE_START || port > this.constructor.PORT_RANGE_END) {
+            return callback(new Error(
+              `No free port in range ${this.constructor.PORT_RANGE_START}-${this.constructor.PORT_RANGE_END}`
+            ));
+          }
+          callback(null, port);
+        } catch (e) {
+          callback(e);
+        }
+      }
+    );
+  }
+
+  // Generate candidate ports: gaps first, then sequential from max+1
+  static makePortRange(usedPorts) {
+    const candidates = [];
+    for (let p = Database.PORT_RANGE_START; p <= Database.PORT_RANGE_END && candidates.length < 100; p++) {
+      if (!usedPorts.has(p)) candidates.push(p);
+    }
+    return candidates;
   }
 
   // Project CRUD

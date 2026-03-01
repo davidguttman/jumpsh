@@ -28,7 +28,7 @@ class SubdomainProxy {
               <body style="font-family: system-ui; padding: 40px; text-align: center;">
                 <h1>404 - Project Not Found</h1>
                 <p>No project registered for subdomain: <strong>${subdomain}</strong></p>
-                <a href="http://${this.config.domain}:${this.config.port}">← Back to Localhaus</a>
+                <a href="${this.config.https ? 'https' : 'http'}://${this.config.domain}:${this.config.port}">← Back to Localhaus</a>
               </body>
             </html>
           `);
@@ -43,7 +43,7 @@ class SubdomainProxy {
               <body style="font-family: system-ui; padding: 40px; text-align: center;">
                 <h1>503 - Project Not Running</h1>
                 <p><strong>${project.name}</strong> is not currently running.</p>
-                <a href="http://${this.config.domain}:${this.config.port}/projects/${project.id}">Start Project</a>
+                <a href="${this.config.https ? 'https' : 'http'}://${this.config.domain}:${this.config.port}/projects/${project.id}">Start Project</a>
               </body>
             </html>
           `);

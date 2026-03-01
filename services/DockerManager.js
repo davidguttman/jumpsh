@@ -1,29 +1,94 @@
-import { exec, spawn } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { execCompose, buildComposeSpawn } from './dockerCommand.js';
+import { detectProjectType } from './ProjectDetector.js';
+import { generateCompose } from './ComposeGenerator.js';
 
-const execAsync = promisify(exec);
+// Timeouts (ms)
+const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
+const DOCKER_CMD_TIMEOUT = 30 * 1000;        // 30s for status/logs/down
 
 class DockerManager {
-  constructor() {
-    this.runningContainers = new Map(); // projectId -> containerId
+  constructor(db) {
+    this.db = db;
+  }
+
+  /**
+   * Find the compose file for a project.
+   * Checks: project root docker-compose.yml/yaml, then .localhaus/docker-compose.yml
+   * @returns {{ composePath: string|null, isLocalhaus: boolean }}
+   */
+  getComposeFile(projectPath) {
+    const rootYml = path.join(projectPath, 'docker-compose.yml');
+    const rootYaml = path.join(projectPath, 'docker-compose.yaml');
+    const localhausYml = path.join(projectPath, '.localhaus', 'docker-compose.yml');
+
+    if (fs.existsSync(rootYml)) return { composePath: rootYml, isLocalhaus: false };
+    if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isLocalhaus: false };
+    if (fs.existsSync(localhausYml)) return { composePath: localhausYml, isLocalhaus: true };
+
+    return { composePath: null, isLocalhaus: false };
   }
 
   async start(project) {
     const { id, path: projectPath, name } = project;
-    
-    // Check if docker-compose.yml exists
-    const composePath = path.join(projectPath, 'docker-compose.yml');
-    const composeYamlPath = path.join(projectPath, 'docker-compose.yaml');
-    
-    if (!fs.existsSync(composePath) && !fs.existsSync(composeYamlPath)) {
-      // TODO: Auto-generate with nixpacks
-      return { success: false, error: 'No docker-compose.yml found. Auto-generation coming soon.' };
+
+    let { composePath } = this.getComposeFile(projectPath);
+
+    // No compose file found — try auto-generation
+    if (!composePath) {
+      const detection = detectProjectType(projectPath);
+
+      if (detection.error) {
+        return { success: false, error: detection.error };
+      }
+      if (detection.needsManualConfig) {
+        return { success: false, error: detection.message };
+      }
+
+      // Get or assign a port
+      let assignedPort = project.assigned_port;
+      if (!assignedPort && this.db) {
+        try {
+          assignedPort = await new Promise((resolve, reject) => {
+            this.db.getNextPort((err, port) => {
+              if (err) return reject(err);
+              resolve(port);
+            });
+          });
+          // Persist the assigned port
+          await new Promise((resolve, reject) => {
+            this.db.updateProject(id, { assigned_port: assignedPort }, (err) => {
+              if (err) return reject(err);
+              resolve();
+            });
+          });
+        } catch (err) {
+          return { success: false, error: `Port allocation failed: ${err.message}` };
+        }
+      }
+      if (!assignedPort) assignedPort = 10000;
+
+      try {
+        const result = generateCompose(projectPath, detection, assignedPort);
+        composePath = result.composePath;
+        if (result.skipped) {
+          console.log(`Using existing .localhaus/docker-compose.yml for ${name}`);
+        } else {
+          console.log(`Auto-generated compose files for ${name} (${detection.type}/${detection.framework || 'generic'}) on port ${assignedPort}`);
+        }
+      } catch (err) {
+        return { success: false, error: `Compose generation failed: ${err.message}` };
+      }
     }
 
     try {
-      await execAsync('docker compose up -d --build', { cwd: projectPath });
+      await execCompose(
+        ['up', '-d', '--build'],
+        composePath,
+        { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+      );
       const status = await this.getStatus(project);
       return { success: true, status };
     } catch (error) {
@@ -33,9 +98,10 @@ class DockerManager {
 
   async stop(project) {
     const { path: projectPath } = project;
-    
+    const { composePath } = this.getComposeFile(projectPath);
+
     try {
-      await execAsync('docker compose down', { cwd: projectPath });
+      await execCompose(['down'], composePath, { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT });
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -49,32 +115,29 @@ class DockerManager {
 
   async getStatus(project) {
     const { path: projectPath } = project;
-    
+    const { composePath } = this.getComposeFile(projectPath);
+
     try {
-      const { stdout } = await execAsync(
-        'docker compose ps --format json',
-        { cwd: projectPath }
+      const { stdout } = await execCompose(
+        ['ps', '--format', 'json'],
+        composePath,
+        { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT }
       );
-      
+
       if (!stdout.trim()) {
         return { running: false, containers: [] };
       }
 
-      // Parse JSON lines (one per container)
       const containers = stdout
         .trim()
         .split('\n')
         .filter(Boolean)
         .map(line => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
+          try { return JSON.parse(line); } catch { return null; }
         })
         .filter(Boolean);
 
-      const running = containers.some(c => 
+      const running = containers.some(c =>
         c.State === 'running' || c.Status?.includes('Up')
       );
 
@@ -89,14 +152,12 @@ class DockerManager {
     if (!status.running || !status.containers.length) return null;
 
     const container = status.containers[0];
-    
-    // Try to get port from Publishers array
+
     if (container.Publishers?.length) {
       const pub = container.Publishers.find(p => p.PublishedPort);
       if (pub) return pub.PublishedPort;
     }
 
-    // Try parsing from Ports string (e.g., "0.0.0.0:3000->3000/tcp")
     if (container.Ports) {
       const match = container.Ports.match(/0\.0\.0\.0:(\d+)/);
       if (match) return parseInt(match[1], 10);
@@ -107,11 +168,13 @@ class DockerManager {
 
   async getLogs(project, lines = 100) {
     const { path: projectPath } = project;
-    
+    const { composePath } = this.getComposeFile(projectPath);
+
     try {
-      const { stdout } = await execAsync(
-        `docker compose logs --tail=${lines} --no-color`,
-        { cwd: projectPath }
+      const { stdout } = await execCompose(
+        ['logs', `--tail=${lines}`, '--no-color'],
+        composePath,
+        { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT }
       );
       return stdout;
     } catch (error) {
@@ -119,19 +182,18 @@ class DockerManager {
     }
   }
 
-  // SSE log streaming
   streamLogs(project, res) {
     const { path: projectPath } = project;
-    
+    const { composePath } = this.getComposeFile(projectPath);
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive'
     });
 
-    const child = spawn('docker', ['compose', 'logs', '-f', '--no-color'], {
-      cwd: projectPath
-    });
+    const { command, args } = buildComposeSpawn(['logs', '-f', '--no-color'], composePath);
+    const child = spawn(command, args, { cwd: projectPath });
 
     child.stdout.on('data', (data) => {
       const lines = data.toString().split('\n');
@@ -151,7 +213,6 @@ class DockerManager {
       res.end();
     });
 
-    // Cleanup on client disconnect
     res.on('close', () => {
       child.kill();
     });

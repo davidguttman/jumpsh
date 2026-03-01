@@ -2,6 +2,10 @@ import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
+import https from 'https';
+import fs from 'fs';
+import os from 'os';
 
 import Database from './database.js';
 import DockerManager from './services/DockerManager.js';
@@ -13,16 +17,29 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Resolve paths with tilde expansion (Node does not expand ~ in env vars)
+function resolvePath(p) {
+  if (p.startsWith('~/') || p === '~') {
+    return path.join(os.homedir(), p.slice(1));
+  }
+  return path.resolve(p);
+}
+
+const certPath = resolvePath(
+  process.env.LOCALHAUS_CERT_PATH || '~/.localhaus/certs'
+);
+
 // Config
 const config = {
   port: process.env.LOCALHAUS_PORT || 5050,
   domain: process.env.LOCALHAUS_DOMAIN || 'localhost',
-  https: process.env.LOCALHAUS_HTTPS === 'true'
+  https: process.env.LOCALHAUS_HTTPS === 'true',
+  certPath
 };
 
 // Initialize services
 const db = new Database();
-const docker = new DockerManager();
+const docker = new DockerManager(db);
 const worktreeScanner = new WorktreeScanner(db);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
 
@@ -44,6 +61,7 @@ app.set('views', path.join(__dirname, 'views'));
 app.get('/', async (req, res) => {
   db.getAllProjectsIncludingWorktrees(async (err, projects) => {
     if (err) {
+      console.error('Dashboard DB error:', err.message);
       return res.status(500).send('Database error');
     }
 
@@ -108,7 +126,11 @@ app.get('/projects/:id', (req, res) => {
   const { id } = req.params;
   
   db.getProject(id, async (err, project) => {
-    if (err || !project) {
+    if (err) {
+      console.error(`Project detail DB error (id=${id}):`, err.message);
+      return res.status(500).send('Database error');
+    }
+    if (!project) {
       return res.status(404).send('Project not found');
     }
 
@@ -203,6 +225,7 @@ app.delete('/projects/:id', (req, res) => {
 app.get('/api/projects', async (req, res) => {
   db.getAllProjectsIncludingWorktrees(async (err, projects) => {
     if (err) {
+      console.error('API projects DB error:', err.message);
       return res.status(500).json({ error: 'Database error' });
     }
 
@@ -220,13 +243,40 @@ app.get('/api/projects', async (req, res) => {
 
 // ============ Start Server ============
 
-const server = app.listen(config.port, () => {
+let server;
+if (config.https) {
+  const keyPath = path.join(config.certPath, 'localhost-key.pem');
+  const certFile = path.join(config.certPath, 'localhost.pem');
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certFile)) {
+    console.warn(
+      `LOCALHAUS_HTTPS=true but certs not found at ${config.certPath}\n` +
+      `Run scripts/setup-macos.sh or scripts/setup-linux.sh first.\n` +
+      `Falling back to HTTP.`
+    );
+    config.https = false;
+    server = http.createServer(app);
+  } else {
+    const httpsOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certFile)
+    };
+    server = https.createServer(httpsOptions, app);
+  }
+} else {
+  server = http.createServer(app);
+}
+
+const protocol = config.https ? 'https' : 'http';
+
+server.listen(config.port, () => {
   console.log(`
 ╔═══════════════════════════════════════════╗
 ║           🏠 Localhaus v0.1.0             ║
 ╠═══════════════════════════════════════════╣
-║  Dashboard: http://${config.domain}:${config.port}
+║  Dashboard: ${protocol}://${config.domain}:${config.port}
 ║  Domain:    *.${config.domain}
+║  Protocol:  ${protocol.toUpperCase()}
 ╚═══════════════════════════════════════════╝
   `);
 

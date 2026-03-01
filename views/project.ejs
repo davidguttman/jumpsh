@@ -22,7 +22,7 @@
         <p><strong>Path:</strong> <code><%= project.path %></code></p>
         <p><strong>Subdomain:</strong> 
           <% if (project.status === 'running') { %>
-            <a href="http://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
+            <a href="<%= config.https ? 'https' : 'http' %>://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
               <%= project.subdomain %>.<%= config.domain %>
             </a>
           <% } else { %>
@@ -65,7 +65,7 @@
                   <td><code><%= wt.branch_name %></code></td>
                   <td>
                     <% if (wt.status === 'running') { %>
-                      <a href="http://<%= wt.subdomain %>.<%= config.domain %>" target="_blank">
+                      <a href="<%= config.https ? 'https' : 'http' %>://<%= wt.subdomain %>.<%= config.domain %>" target="_blank">
                         <%= wt.subdomain %>.<%= config.domain %>
                       </a>
                     <% } else { %>
