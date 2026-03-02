@@ -34,9 +34,9 @@ const certPath = resolvePath(
 
 // Config
 const config = {
-  port: parseInt(process.env.JUMPSH_PORT, 10) || 5050,
+  port: parseInt(process.env.JUMPSH_PORT, 10) || 443,
   domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
-  https: process.env.JUMPSH_HTTPS === 'true',
+  https: process.env.JUMPSH_HTTPS !== 'false',
   certPath
 };
 
