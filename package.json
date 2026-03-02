@@ -1,9 +1,12 @@
 {
-  "name": "localhaus",
+  "name": "jumpsh",
   "version": "0.1.0",
   "type": "module",
-  "description": "Local dev server dashboard with Docker + subdomain routing",
+  "description": "jump.sh — local dev server with Docker containers + subdomain routing",
   "main": "server.js",
+  "bin": {
+    "jumpsh": "./bin/jumpsh.js"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"

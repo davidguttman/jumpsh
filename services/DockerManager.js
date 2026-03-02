@@ -16,19 +16,19 @@ class DockerManager {
 
   /**
    * Find the compose file for a project.
-   * Checks: project root docker-compose.yml/yaml, then .localhaus/docker-compose.yml
-   * @returns {{ composePath: string|null, isLocalhaus: boolean }}
+   * Checks: project root docker-compose.yml/yaml, then .jump.sh/docker-compose.yml
+   * @returns {{ composePath: string|null, isGenerated: boolean }}
    */
   getComposeFile(projectPath) {
     const rootYml = path.join(projectPath, 'docker-compose.yml');
     const rootYaml = path.join(projectPath, 'docker-compose.yaml');
-    const localhausYml = path.join(projectPath, '.localhaus', 'docker-compose.yml');
+    const jumpshYml = path.join(projectPath, '.jump.sh', 'docker-compose.yml');
 
-    if (fs.existsSync(rootYml)) return { composePath: rootYml, isLocalhaus: false };
-    if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isLocalhaus: false };
-    if (fs.existsSync(localhausYml)) return { composePath: localhausYml, isLocalhaus: true };
+    if (fs.existsSync(rootYml)) return { composePath: rootYml, isGenerated: false };
+    if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isGenerated: false };
+    if (fs.existsSync(jumpshYml)) return { composePath: jumpshYml, isGenerated: true };
 
-    return { composePath: null, isLocalhaus: false };
+    return { composePath: null, isGenerated: false };
   }
 
   async start(project) {
@@ -74,7 +74,7 @@ class DockerManager {
         const result = generateCompose(projectPath, detection, assignedPort);
         composePath = result.composePath;
         if (result.skipped) {
-          console.log(`Using existing .localhaus/docker-compose.yml for ${name}`);
+          console.log(`Using existing .jump.sh/docker-compose.yml for ${name}`);
         } else {
           console.log(`Auto-generated compose files for ${name} (${detection.type}/${detection.framework || 'generic'}) on port ${assignedPort}`);
         }

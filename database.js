@@ -10,9 +10,9 @@ const __dirname = path.dirname(__filename);
 
 class Database {
   constructor() {
-    const dataDir = path.join(os.homedir(), '.localhaus');
+    const dataDir = path.join(os.homedir(), '.jump.sh');
     fs.mkdirSync(dataDir, { recursive: true });
-    const dbPath = path.join(dataDir, 'localhaus.db');
+    const dbPath = path.join(dataDir, 'projects.db');
     this.db = new (sqlite3.verbose().Database)(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err.message);

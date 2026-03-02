@@ -26,14 +26,14 @@ function resolvePath(p) {
 }
 
 const certPath = resolvePath(
-  process.env.LOCALHAUS_CERT_PATH || '~/.localhaus/certs'
+  process.env.JUMPSH_CERT_PATH || '~/.jump.sh/certs'
 );
 
 // Config
 const config = {
-  port: parseInt(process.env.LOCALHAUS_PORT, 10) || 5050,
-  domain: process.env.LOCALHAUS_DOMAIN || 'localhaus',
-  https: process.env.LOCALHAUS_HTTPS === 'true',
+  port: parseInt(process.env.JUMPSH_PORT, 10) || 5050,
+  domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
+  https: process.env.JUMPSH_HTTPS === 'true',
   certPath
 };
 
@@ -257,13 +257,13 @@ app.get('/api/projects', async (req, res) => {
 
 let server;
 if (config.https) {
-  const keyPath = path.join(config.certPath, 'localhost-key.pem');
-  const certFile = path.join(config.certPath, 'localhost.pem');
+  const keyPath = path.join(config.certPath, 'server-key.pem');
+  const certFile = path.join(config.certPath, 'server.pem');
 
   if (!fs.existsSync(keyPath) || !fs.existsSync(certFile)) {
     console.warn(
-      `LOCALHAUS_HTTPS=true but certs not found at ${config.certPath}\n` +
-      `Run scripts/setup-macos.sh or scripts/setup-linux.sh first.\n` +
+      `JUMPSH_HTTPS=true but certs not found at ${config.certPath}\n` +
+      `Run 'jumpsh install' to generate certs via mkcert.\n` +
       `Falling back to HTTP.`
     );
     config.https = false;
@@ -280,12 +280,12 @@ if (config.https) {
 }
 
 const protocol = config.https ? 'https' : 'http';
-const dashboardUrl = formatUrl(`localhaus.${config.domain}`);
+const dashboardUrl = formatUrl(`dashboard.${config.domain}`);
 
 server.listen(config.port, () => {
   console.log(`
 ╔═══════════════════════════════════════════╗
-║           🏠 Localhaus v0.1.0             ║
+║            jump.sh v0.1.0                 ║
 ╠═══════════════════════════════════════════╣
 ║  Dashboard: ${dashboardUrl}
 ║  Projects:  ${formatUrl(`*.${config.domain}`)}

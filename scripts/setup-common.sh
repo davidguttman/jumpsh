@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# setup-common.sh — Shared utilities for localhaus setup scripts
-# Sourced by setup-macos.sh and setup-linux.sh
+# setup-common.sh — Shared utilities for jump.sh setup
+# Used by jumpsh install command
 
 set -euo pipefail
 
-LOCALHAUS_DIR="${HOME}/.localhaus"
-LOCALHAUS_CERTS_DIR="${LOCALHAUS_DIR}/certs"
-LOCALHAUS_LOG="${LOCALHAUS_DIR}/setup.log"
+JUMPSH_DIR="${HOME}/.jump.sh"
+JUMPSH_CERTS_DIR="${JUMPSH_DIR}/certs"
+JUMPSH_LOG="${JUMPSH_DIR}/setup.log"
 
-CERT_FILE="${LOCALHAUS_CERTS_DIR}/localhost.pem"
-KEY_FILE="${LOCALHAUS_CERTS_DIR}/localhost-key.pem"
+CERT_FILE="${JUMPSH_CERTS_DIR}/server.pem"
+KEY_FILE="${JUMPSH_CERTS_DIR}/server-key.pem"
 
 # Colors (only when stdout is a terminal)
 if [[ -t 1 ]]; then
@@ -29,12 +29,12 @@ fi
 # --- Logging ---
 
 setup_log() {
-  mkdir -p "${LOCALHAUS_DIR}"
-  echo "--- localhaus setup $(date -u '+%Y-%m-%dT%H:%M:%SZ') ---" >> "${LOCALHAUS_LOG}"
+  mkdir -p "${JUMPSH_DIR}"
+  echo "--- jump.sh setup $(date -u '+%Y-%m-%dT%H:%M:%SZ') ---" >> "${JUMPSH_LOG}"
 }
 
 log() {
-  echo "[$(date -u '+%H:%M:%S')] $*" >> "${LOCALHAUS_LOG}"
+  echo "[$(date -u '+%H:%M:%S')] $*" >> "${JUMPSH_LOG}"
 }
 
 # --- Output helpers ---
@@ -78,7 +78,7 @@ generate_certs() {
   print_header "Generating TLS certificates"
 
   if [[ -f "${CERT_FILE}" && -f "${KEY_FILE}" ]]; then
-    print_status "Certs already exist at ${LOCALHAUS_CERTS_DIR}"
+    print_status "Certs already exist at ${JUMPSH_CERTS_DIR}"
     log "SKIP: certs already exist"
     return 0
   fi
@@ -87,15 +87,15 @@ generate_certs() {
     return 1
   fi
 
-  mkdir -p "${LOCALHAUS_CERTS_DIR}"
-  log "ACTION: generating certs in ${LOCALHAUS_CERTS_DIR}"
+  mkdir -p "${JUMPSH_CERTS_DIR}"
+  log "ACTION: generating certs in ${JUMPSH_CERTS_DIR}"
 
   mkcert -install 2>&1 | while IFS= read -r line; do log "mkcert-install: ${line}"; done
 
   mkcert \
     -cert-file "${CERT_FILE}" \
     -key-file "${KEY_FILE}" \
-    "*.localhaus" localhaus localhost 127.0.0.1 ::1 \
+    "*.jump.sh" jump.sh localhost 127.0.0.1 ::1 \
     2>&1 | while IFS= read -r line; do log "mkcert: ${line}"; done
 
   if [[ -f "${CERT_FILE}" && -f "${KEY_FILE}" ]]; then
@@ -103,50 +103,17 @@ generate_certs() {
     echo "       cert: ${CERT_FILE}"
     echo "       key:  ${KEY_FILE}"
   else
-    print_error "Certificate generation failed. Check ${LOCALHAUS_LOG}"
+    print_error "Certificate generation failed. Check ${JUMPSH_LOG}"
     return 1
   fi
-}
-
-# --- DNS verification ---
-
-verify_dns() {
-  print_header "Verifying DNS resolution"
-
-  local test_host="test.localhaus"
-
-  # Try dig first
-  if command -v dig &>/dev/null; then
-    local result
-    result=$(dig +short "${test_host}" @127.0.0.1 2>/dev/null || true)
-    if [[ "${result}" == "127.0.0.1" ]]; then
-      print_status "${test_host} resolves to 127.0.0.1 via dnsmasq"
-      return 0
-    fi
-  fi
-
-  # Fallback: try getent or ping
-  if command -v getent &>/dev/null; then
-    local result
-    result=$(getent hosts "${test_host}" 2>/dev/null | awk '{print $1}' || true)
-    if [[ "${result}" == "127.0.0.1" ]]; then
-      print_status "${test_host} resolves to 127.0.0.1 via system resolver"
-      return 0
-    fi
-  fi
-
-  print_warn "Could not verify DNS for ${test_host}."
-  print_warn ".localhaus requires dnsmasq — ensure it is running."
-  print_warn "Try: dig test.localhaus @127.0.0.1"
-  return 0
 }
 
 # --- Finish ---
 
 print_finish() {
   print_header "Setup complete"
-  echo "  Cert dir:  ${LOCALHAUS_CERTS_DIR}"
-  echo "  Log file:  ${LOCALHAUS_LOG}"
+  echo "  Cert dir:  ${JUMPSH_CERTS_DIR}"
+  echo "  Log file:  ${JUMPSH_LOG}"
   echo ""
   print_warn "Restart your browser(s) for the mkcert root CA to take effect."
   echo ""
