@@ -16,7 +16,7 @@ import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { RemoteSyncer } from './lib/remote/syncer.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,11 +44,11 @@ const config = {
 
 /**
  * Format a URL, omitting the port when it's the default for the protocol
- * (4443 for HTTPS, 80 for HTTP).
+ * (443 for HTTPS, 80 for HTTP).
  */
 function formatUrl(host, pathStr = '') {
   const proto = config.https ? 'https' : 'http';
-  const defaultPort = config.https ? 4443 : 80;
+  const defaultPort = config.https ? 443 : 80;
   const portSuffix = config.port === defaultPort ? '' : `:${config.port}`;
   return `${proto}://${host}${portSuffix}${pathStr}`;
 }
