@@ -61,7 +61,7 @@
                       <span class="branch-name"><%= wt.branch_name %></span>
                       <% if (wt.status === 'running') { %>
                         <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-url">
-                          <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:///, '') %>
+                          <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                         </a>
                       <% } else { %>
                         <span class="wt-url inactive"><%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
