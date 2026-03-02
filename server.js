@@ -276,7 +276,16 @@ app.get('/api/browse', (req, res) => {
   try {
     const entries = fs.readdirSync(resolved, { withFileTypes: true });
     const directories = entries
-      .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+      .filter(d => {
+        if (d.name.startsWith('.')) return false;
+        if (d.isDirectory()) return true;
+        if (d.isSymbolicLink()) {
+          try {
+            return fs.statSync(path.join(resolved, d.name)).isDirectory();
+          } catch { return false; }
+        }
+        return false;
+      })
       .map(d => d.name)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
