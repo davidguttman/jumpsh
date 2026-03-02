@@ -126,55 +126,31 @@ main {
 /* ---- Buttons ---- */
 .btn {
   display: inline-block;
-  padding: 0.35rem 0.8rem;
-  border: 2px solid var(--border-inner);
-  background: var(--bg-card);
-  color: var(--text);
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-bright);
   cursor: pointer;
   font-family: var(--font-pixel);
-  font-size: 0.55rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  transition: all 0.15s;
-  image-rendering: pixelated;
+  font-size: 0.6rem;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+  transition: all 0.1s ease;
+  position: relative;
+}
+
+.btn::before {
+  content: '\25B6\00a0';
+  margin-right: 4px;
 }
 
 .btn:hover {
-  background: #333;
-  border-color: var(--accent-gold);
-  color: var(--text-bright);
+  color: var(--accent-cyan);
   text-decoration: none;
 }
 
-.btn-primary {
-  background: #2244aa;
-  border-color: #4466cc;
-  color: var(--text-bright);
-}
 
-.btn-primary:hover {
-  background: #3355cc;
-}
 
-.btn-success {
-  background: #226622;
-  border-color: var(--accent-green);
-  color: var(--accent-green);
-}
-
-.btn-success:hover {
-  background: #338833;
-}
-
-.btn-danger {
-  background: #662222;
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-}
-
-.btn-danger:hover {
-  background: #883333;
-}
 
 .btn-danger-outline {
   background: transparent;
@@ -201,23 +177,21 @@ main {
 
 /* ---- Project Card ---- */
 .project-card {
-  background: var(--bg-card);
-  border: 3px solid var(--border-inner);
-  padding: 1rem 1.2rem;
-  position: relative;
-  /* double-border effect like reference */
-  outline: 3px solid var(--border-outer);
-  outline-offset: 3px;
-  margin: 6px; /* space for outline */
+  background-color: #161616;
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1.2rem;
 }
 
 .project-card.running {
-  border-color: var(--border-inner);
-  outline-color: var(--accent-gold);
+  box-shadow: 0 0 0 2px rgba(64, 232, 64, 0.35);
 }
 
 .project-card.stopped {
-  outline-color: #686870;
+  opacity: 0.92;
 }
 
 .project-header {
@@ -396,9 +370,9 @@ main {
   max-width: 600px;
   margin: 0 auto;
   background: var(--bg-card);
-  border: 3px solid var(--border-inner);
-  outline: 3px solid var(--border-outer);
-  outline-offset: 3px;
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   padding: 2rem;
 }
 
@@ -453,9 +427,9 @@ main {
 
 .project-info {
   background: var(--bg-card);
-  border: 3px solid var(--border-inner);
-  outline: 3px solid var(--border-outer);
-  outline-offset: 3px;
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   padding: 1.5rem;
   margin: 1.5rem 0;
 }
@@ -490,9 +464,9 @@ main {
   width: 100%;
   border-collapse: collapse;
   background: var(--bg-card);
-  border: 3px solid var(--border-inner);
-  outline: 3px solid var(--border-outer);
-  outline-offset: 3px;
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   overflow: hidden;
 }
 
@@ -536,9 +510,9 @@ main {
   background: #0a0a12;
   color: var(--accent-green);
   padding: 1rem;
-  border: 3px solid var(--border-inner);
-  outline: 3px solid var(--border-outer);
-  outline-offset: 3px;
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   max-height: 500px;
