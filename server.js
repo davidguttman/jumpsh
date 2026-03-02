@@ -13,6 +13,7 @@ import DockerManager from './services/DockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
+import { RemoteSyncer } from './lib/remote/syncer.js';
 
 dotenv.config();
 
@@ -56,6 +57,8 @@ const db = new Database();
 const docker = new DockerManager(db);
 const worktreeScanner = new WorktreeScanner(db);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
+const remoteSyncer = new RemoteSyncer();
+subdomainProxy.setRemoteSyncer(remoteSyncer);
 
 const app = express();
 
@@ -359,6 +362,9 @@ server.listen(config.port, () => {
 
   // Start watching all projects for worktrees
   worktreeScanner.scanAllProjects();
+
+  // Start remote route sync (loads cache + periodic refresh if logged in)
+  remoteSyncer.start();
 });
 
 // ============ Signal Handling ============
@@ -382,6 +388,7 @@ async function shutdown(signal) {
   try {
     server.close();
     worktreeScanner.cleanup();
+    remoteSyncer.stop();
     clearInterval(rotationTimer);
     await new Promise((resolve) => db.close(resolve));
     devinfo('Shutdown complete');
@@ -396,7 +403,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 process.on('SIGHUP', () => {
-  console.log('Received SIGHUP, rescanning worktrees...');
-  devinfo('SIGHUP received, rescanning worktrees');
+  console.log('Received SIGHUP, rescanning worktrees + remote routes...');
+  devinfo('SIGHUP received, rescanning worktrees and remote routes');
   worktreeScanner.scanAllProjects();
+  remoteSyncer.refresh();
 });

@@ -6,20 +6,35 @@ class SubdomainProxy {
     this.docker = docker;
     this.config = config;
     this.proxyCache = new Map();
+    this._remoteSyncer = null;
+  }
+
+  /**
+   * Set the RemoteSyncer instance for remote route lookups.
+   */
+  setRemoteSyncer(syncer) {
+    this._remoteSyncer = syncer;
   }
 
   middleware() {
     return async (req, res, next) => {
       const host = req.get('host');
       if (!host) return next();
-      
+
+      // Check remote routes first (full hostname match, e.g., "my-app.dmg.jump.sh")
+      const remotePort = this._lookupRemoteRoute(host);
+      if (remotePort) {
+        const proxy = this.getOrCreateProxy(remotePort);
+        return proxy(req, res, next);
+      }
+
       const subdomain = this.extractSubdomain(host);
       if (!subdomain) return next();
-      
+
       // Skip if this is the main dashboard domain
       if (this.isMainDomain(subdomain)) return next();
 
-      // Find project by subdomain
+      // Find project by subdomain (local routes)
       this.db.getProjectBySubdomain(subdomain, async (err, project) => {
         if (err || !project) {
           const homeUrl = this.config.formatUrl(`dashboard.${this.config.domain}`);
@@ -56,6 +71,16 @@ class SubdomainProxy {
         return proxy(req, res, next);
       });
     };
+  }
+
+  /**
+   * Look up a remote route by full hostname (e.g., "my-app.dmg.jump.sh").
+   * Returns the target port or null.
+   */
+  _lookupRemoteRoute(host) {
+    if (!this._remoteSyncer) return null;
+    const hostWithoutPort = host.split(':')[0];
+    return this._remoteSyncer.getHostMap().get(hostWithoutPort) || null;
   }
 
   extractSubdomain(host) {
