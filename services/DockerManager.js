@@ -4,6 +4,7 @@ import path from 'path';
 import { execCompose, buildComposeSpawn } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
 import { generateCompose } from './ComposeGenerator.js';
+import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
 
 // Timeouts (ms)
 const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
@@ -90,6 +91,7 @@ class DockerManager {
         { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
       );
       const status = await this.getStatus(project);
+      projectInfo(projectPath, 'Container started', { name });
       return { success: true, status };
     } catch (error) {
       // Detect Docker port conflict and retry once with a new port
@@ -119,11 +121,14 @@ class DockerManager {
             { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
           );
           const retryStatus = await this.getStatus(project);
+          projectInfo(projectPath, 'Container started after port retry', { name, port: newPort });
           return { success: true, status: retryStatus };
         } catch (retryError) {
+          projectError(projectPath, 'Port conflict retry failed', { name, error: retryError.message });
           return { success: false, error: `Port conflict retry failed: ${retryError.message}` };
         }
       }
+      projectError(projectPath, 'Container start failed', { name, error: error.message });
       return { success: false, error: error.message };
     }
   }
@@ -134,8 +139,10 @@ class DockerManager {
 
     try {
       await execCompose(['down'], composePath, { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT });
+      projectInfo(projectPath, 'Container stopped', { name: project.name });
       return { success: true };
     } catch (error) {
+      projectError(projectPath, 'Container stop failed', { name: project.name, error: error.message });
       return { success: false, error: error.message };
     }
   }

@@ -1,7 +1,9 @@
 node_modules/
 .jump.sh/
+.jump.sh/dev.log
 .env
 *.sync-conflict-*
 .DS_Store
 .development-state.json
 *.db
+.jump.sh/dev.log.*
