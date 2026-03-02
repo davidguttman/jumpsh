@@ -1,0 +1,33 @@
+services:
+  localhaus-under-test:
+    build:
+      context: ../..
+      dockerfile: e2e/lifecycle/Dockerfile.localhaus
+    network_mode: host
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${FIXTURE_HOST_PATH}:${FIXTURE_HOST_PATH}
+    environment:
+      - LOCALHAUS_PORT=7777
+      - LOCALHAUS_DOMAIN=test.local
+      - LOCALHAUS_HTTPS=false
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7777/"]
+      interval: 2s
+      timeout: 3s
+      start_period: 15s
+      retries: 30
+
+  test-runner:
+    build:
+      context: ../..
+      dockerfile: e2e/lifecycle/Dockerfile.test-runner
+    network_mode: host
+    environment:
+      - LOCALHAUS_URL=http://localhost:7777
+      - FIXTURE_PATH=${FIXTURE_HOST_PATH}
+      - LOCALHAUS_DOMAIN=test.local
+    depends_on:
+      localhaus-under-test:
+        condition: service_healthy

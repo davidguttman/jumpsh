@@ -148,6 +148,16 @@ The daemon automatically syncs routes every 30 seconds when logged in.
     Start/Stop       up/down/logs      → container:port
 ```
 
+## Reproducible Lifecycle Proof
+
+Run the full create → start → proxy → logs → stop → delete lifecycle in an isolated Docker environment:
+
+```bash
+npm run test:lifecycle
+```
+
+Requires Docker with compose plugin. No other dependencies — the test builds its own localhaus image, starts a fixture container, runs 11 assertions, and cleans up.
+
 ## License
 
 MIT

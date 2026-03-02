@@ -4,3 +4,4 @@ node_modules/
 *.sync-conflict-*
 .DS_Store
 .development-state.json
+*.db
