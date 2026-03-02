@@ -18,6 +18,7 @@ class Database {
         console.error('Error opening database:', err.message);
       } else {
         console.log('Connected to SQLite database');
+        this.db.run('PRAGMA journal_mode=WAL');
         this.init();
       }
     });

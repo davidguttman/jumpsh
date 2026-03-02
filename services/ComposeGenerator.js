@@ -177,6 +177,11 @@ services:
 ${volumes.join('\n')}${envSection}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: ${detection.devCommand}
 `;
 }
