@@ -23,9 +23,14 @@
         </div>
 
         <div class="form-group">
-          <label for="path">Project Path</label>
-          <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app">
-          <small>Absolute path to project directory (must contain docker-compose.yml)</small>
+          <label for="path">Project Folder</label>
+          <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app" list="folder-options">
+          <datalist id="folder-options">
+            <% (folderOptions || []).forEach(function(folder) { %>
+              <option value="<%= folder %>"></option>
+            <% }) %>
+          </datalist>
+          <small>Absolute path to project folder. docker-compose is optional; jump.sh will generate one when possible.</small>
         </div>
 
         <div class="form-group">

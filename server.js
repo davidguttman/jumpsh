@@ -113,7 +113,8 @@ app.get('/', async (req, res) => {
 
 // Add project form
 app.get('/add', (req, res) => {
-  res.render('add', { config });
+  const folderOptions = listProjectFolders();
+  res.render('add', { config, folderOptions });
 });
 
 // Create project
@@ -293,6 +294,36 @@ async function identifyPortHolder(port) {
 
 // ============ Start Server ============
 
+async function findNextAvailablePort(startPort, maxDelta = 25) {
+  for (let p = startPort + 1; p <= startPort + maxDelta; p++) {
+    try {
+      await probePort(p);
+      return p;
+    } catch {}
+  }
+  return null;
+}
+
+function listProjectFolders() {
+  const roots = [
+    path.join(os.homedir(), 'play', 'web'),
+    path.join(os.homedir(), 'play', 'js'),
+    path.join(os.homedir(), 'play', 'native'),
+  ];
+  const out = [];
+  for (const root of roots) {
+    try {
+      const entries = fs.readdirSync(root, { withFileTypes: true })
+        .filter(d => d.isDirectory() && !d.name.startsWith('.') && !d.name.startsWith('_'))
+        .slice(0, 400)
+        .map(d => path.join(root, d.name));
+      out.push(...entries);
+    } catch {}
+  }
+  return out.slice(0, 800);
+}
+
+
 if (config.https && !certsExist()) {
   console.warn(`HTTPS enabled and certs missing at ${config.certPath}; downloading from jump.sh...`);
   try {
@@ -335,15 +366,20 @@ try {
     if (holder) {
       const isJumpsh = holder.name === 'node' || holder.name === 'jumpsh';
       if (isJumpsh) {
-        console.error(`Port ${config.port} is already in use by PID ${holder.pid}. Is the jump.sh daemon already running?`);
+        console.warn(`Port ${config.port} is already in use by PID ${holder.pid}.`);
       } else {
-        console.error(`Port ${config.port} is in use by process ${holder.pid} (${holder.name}). Set JUMPSH_PORT=<other> or stop the conflicting process.`);
+        console.warn(`Port ${config.port} is in use by process ${holder.pid} (${holder.name}).`);
       }
     } else {
-      console.error(`Port ${config.port} is already in use.`);
+      console.warn(`Port ${config.port} is already in use.`);
     }
-    deverror('Port conflict', { port: config.port, holder });
-    process.exit(4);
+    const nextPort = await findNextAvailablePort(config.port);
+    if (!nextPort) {
+      deverror('Port conflict with no fallback', { port: config.port, holder });
+      process.exit(4);
+    }
+    console.warn(`Falling back to available port ${nextPort}.`);
+    config.port = nextPort;
   }
   throw err;
 }
