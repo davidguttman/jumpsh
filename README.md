@@ -62,7 +62,7 @@ Copy `.env.example` to `.env`:
 
 ```env
 JUMPSH_HTTPS=true
-JUMPSH_PORT=443
+JUMPSH_PORT=4443
 JUMPSH_DOMAIN=jump.sh
 JUMPSH_CERT_PATH=~/.jump.sh/certs
 ```

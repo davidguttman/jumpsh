@@ -34,7 +34,7 @@ const certPath = resolvePath(
 
 // Config
 const config = {
-  port: parseInt(process.env.JUMPSH_PORT, 10) || 443,
+  port: parseInt(process.env.JUMPSH_PORT, 10) || 4443,
   domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
   https: process.env.JUMPSH_HTTPS !== 'false',
   certPath
@@ -42,11 +42,11 @@ const config = {
 
 /**
  * Format a URL, omitting the port when it's the default for the protocol
- * (443 for HTTPS, 80 for HTTP).
+ * (4443 for HTTPS, 80 for HTTP).
  */
 function formatUrl(host, pathStr = '') {
   const proto = config.https ? 'https' : 'http';
-  const defaultPort = config.https ? 443 : 80;
+  const defaultPort = config.https ? 4443 : 80;
   const portSuffix = config.port === defaultPort ? '' : `:${config.port}`;
   return `${proto}://${host}${portSuffix}${pathStr}`;
 }
