@@ -70,6 +70,11 @@ function detectNode(projectPath) {
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
   const scripts = pkg.scripts || {};
 
+  // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
+  if (scripts.dev && !scripts.dev.includes('vite')) {
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install };
+  }
+
   // Framework detection
   if (deps.vite || (scripts.dev && scripts.dev.includes('vite'))) {
     return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev`, port: 5173, packageManager: pm, installCommand: pm.install };
