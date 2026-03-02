@@ -261,6 +261,35 @@ app.get('/api/projects', async (req, res) => {
   });
 });
 
+// ============ Browse Folders API ============
+
+app.get('/api/browse', (req, res) => {
+  const requestedPath = req.query.path || '/';
+  const resolved = path.resolve(requestedPath);
+
+  try {
+    const entries = fs.readdirSync(resolved, { withFileTypes: true });
+    const directories = entries
+      .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+      .map(d => d.name)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    res.json({
+      current: resolved,
+      parent: path.dirname(resolved),
+      directories
+    });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    if (err.code === 'EACCES') {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============ Port Conflict Detection ============
 
 function probePort(port) {
