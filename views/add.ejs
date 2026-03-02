@@ -14,11 +14,14 @@
   <main>
     <div class="form-container">
       <h2>Add Project</h2>
-      
+
       <form action="/projects" method="POST">
         <div class="form-group">
           <label for="path">Project Folder</label>
-          <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app" list="folder-options">
+          <div class="path-input-row">
+            <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app" list="folder-options">
+            <button type="button" class="btn btn-browse" id="browse-btn">browse</button>
+          </div>
           <datalist id="folder-options">
             <% (folderOptions || []).forEach(function(folder) { %>
               <option value="<%= folder %>"></option>
@@ -63,5 +66,169 @@
       </script>
     </div>
   </main>
+
+  <!-- Folder Browser Modal -->
+  <div class="folder-modal-overlay" id="folder-modal">
+    <div class="folder-modal">
+      <div class="folder-modal-header">
+        <h3>Select Project Folder</h3>
+        <button class="folder-modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="folder-path-bar" id="path-bar">/</div>
+      <div class="column-browser" id="column-browser"></div>
+      <div class="folder-modal-footer">
+        <button type="button" class="btn" id="modal-cancel">cancel</button>
+        <button type="button" class="btn" id="modal-select">select this folder</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var columns = []
+    var overlay = document.getElementById('folder-modal')
+    var browser = document.getElementById('column-browser')
+    var pathBar = document.getElementById('path-bar')
+    var pathInput = document.getElementById('path')
+
+    document.getElementById('browse-btn').addEventListener('click', function () {
+      var startPath = pathInput.value || '/'
+      columns = []
+      openModal(startPath)
+    })
+
+    document.getElementById('modal-close').addEventListener('click', closeModal)
+    document.getElementById('modal-cancel').addEventListener('click', closeModal)
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeModal()
+    })
+
+    document.getElementById('modal-select').addEventListener('click', function () {
+      pathInput.value = getSelectedPath()
+      closeModal()
+    })
+
+    function openModal(startPath) {
+      overlay.classList.add('open')
+      // Split path into segments and load each column
+      var parts = startPath.split('/').filter(Boolean)
+      var currentPath = '/'
+      columns = []
+      loadColumn(currentPath, 0).then(function () {
+        // Walk down the path selecting each segment
+        return parts.reduce(function (chain, part, i) {
+          return chain.then(function () {
+            var col = columns[i]
+            if (!col || !col.directories) return
+            var idx = col.directories.indexOf(part)
+            if (idx === -1) return
+            col.selected = idx
+            renderColumns()
+            return loadColumn(currentPath + (currentPath === '/' ? '' : '/') + parts.slice(0, i + 1).join('/'), i + 1)
+          })
+        }, Promise.resolve())
+      }).then(function () {
+        // Load one more column for the deepest selected folder
+        var deepPath = getSelectedPath()
+        if (deepPath !== '/' && columns.length > 0) {
+          var lastCol = columns[columns.length - 1]
+          if (lastCol.selected === undefined) return
+          loadColumn(deepPath, columns.length)
+        }
+      })
+    }
+
+    function closeModal() {
+      overlay.classList.remove('open')
+    }
+
+    function getSelectedPath() {
+      var parts = ['/']
+      for (var i = 0; i < columns.length; i++) {
+        var col = columns[i]
+        if (col.selected === undefined) break
+        parts.push(col.directories[col.selected])
+      }
+      var p = parts[0] + parts.slice(1).join('/')
+      return p === '/' ? '/' : p
+    }
+
+    function loadColumn(dirPath, index) {
+      // Trim columns to this index
+      columns = columns.slice(0, index)
+      columns.push({ path: dirPath, loading: true, directories: null, error: null, selected: undefined })
+      renderColumns()
+
+      return fetch('/api/browse?path=' + encodeURIComponent(dirPath))
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Failed to load') })
+          return res.json()
+        })
+        .then(function (data) {
+          columns[index] = { path: data.current, loading: false, directories: data.directories, error: null, selected: undefined }
+          renderColumns()
+        })
+        .catch(function (err) {
+          columns[index] = { path: dirPath, loading: false, directories: null, error: err.message, selected: undefined }
+          renderColumns()
+        })
+    }
+
+    function renderColumns() {
+      pathBar.textContent = getSelectedPath()
+      browser.innerHTML = ''
+
+      for (var i = 0; i < columns.length; i++) {
+        var col = columns[i]
+        var colEl = document.createElement('div')
+        colEl.className = 'column'
+
+        if (col.loading) {
+          colEl.innerHTML = '<div class="column-state">loading...</div>'
+        } else if (col.error) {
+          colEl.innerHTML = '<div class="column-state">' + escapeHtml(col.error) + '</div>'
+        } else if (!col.directories || col.directories.length === 0) {
+          colEl.innerHTML = '<div class="column-state">(empty)</div>'
+        } else {
+          for (var j = 0; j < col.directories.length; j++) {
+            var item = document.createElement('div')
+            item.className = 'column-item' + (col.selected === j ? ' selected' : '')
+            item.innerHTML = '<span class="name">' + escapeHtml(col.directories[j]) + '</span><span class="arrow">\u203A</span>'
+            item.dataset.colIndex = i
+            item.dataset.dirIndex = j
+            item.addEventListener('click', onItemClick)
+            colEl.appendChild(item)
+          }
+        }
+
+        browser.appendChild(colEl)
+      }
+
+      // Auto-scroll to the right
+      browser.scrollLeft = browser.scrollWidth
+    }
+
+    function onItemClick(e) {
+      var target = e.currentTarget
+      var colIdx = parseInt(target.dataset.colIndex)
+      var dirIdx = parseInt(target.dataset.dirIndex)
+      var col = columns[colIdx]
+
+      col.selected = dirIdx
+
+      // Remove columns after this one
+      columns = columns.slice(0, colIdx + 1)
+
+      var newPath = getSelectedPath()
+      loadColumn(newPath, colIdx + 1)
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div')
+      div.textContent = str
+      return div.innerHTML
+    }
+  })()
+  </script>
 </body>
 </html>
