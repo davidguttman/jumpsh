@@ -58,6 +58,42 @@ function detectPackageManager(projectPath) {
   return { name: 'npm', install: 'npm install', run: 'npm run', lockFile: null };
 }
 
+
+/**
+ * Detect port from dev script content based on known tools.
+ * @param {string} scriptContent - The actual script command
+ * @returns {number} - Detected port or 3000 as default
+ */
+function detectPortFromScript(scriptContent) {
+  if (!scriptContent) return 3000;
+  
+  // Check for explicit --port or -p flags first
+  const portFlagMatch = scriptContent.match(/(?:--port|-p)\s+(\d+)/);
+  if (portFlagMatch) return parseInt(portFlagMatch[1], 10);
+  
+  // Known tool defaults
+  const toolPorts = {
+    'budo': 9966,
+    'webpack-dev-server': 8080,
+    'webpack serve': 8080,
+    'parcel': 1234,
+    'snowpack': 8080,
+    'esbuild --serve': 8000,
+    'live-server': 8080,
+    'http-server': 8080,
+    'serve': 3000,
+    'nodemon': 3000,
+    'ts-node': 3000,
+    'tsx': 3000,
+  };
+  
+  for (const [tool, port] of Object.entries(toolPorts)) {
+    if (scriptContent.includes(tool)) return port;
+  }
+  
+  return 3000;
+}
+
 function detectNode(projectPath) {
   let pkg;
   try {
@@ -72,7 +108,7 @@ function detectNode(projectPath) {
 
   // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
   if (scripts.dev && !scripts.dev.includes('vite')) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install };
   }
 
   // Framework detection
@@ -88,13 +124,13 @@ function detectNode(projectPath) {
 
   // Has a dev script
   if (scripts.dev) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install };
   }
 
   // Has a start script
   if (scripts.start) {
     const startCmd = pm.name === 'yarn' ? 'yarn start' : `${pm.run} start`;
-    return { type: 'node', framework: null, devCommand: startCmd, port: 3000, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: startCmd, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install };
   }
 
   // Fallback: find entrypoint
