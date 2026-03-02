@@ -97,7 +97,8 @@ class SubdomainProxy {
   }
 
   isMainDomain(subdomain) {
-    return subdomain === 'dashboard' ||
+    return subdomain === 'dash' ||
+           subdomain === 'dashboard' ||
            subdomain === 'www' ||
            subdomain === this.config.domain.split('.')[0];
   }
