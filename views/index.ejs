@@ -34,11 +34,11 @@
             
             <div class="project-url">
               <% if (project.status === 'running') { %>
-                <a href="<%= config.https ? 'https' : 'http' %>://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
-                  <%= project.subdomain %>.<%= config.domain %>
+                <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
+                  <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                 </a>
               <% } else { %>
-                <span class="url-inactive"><%= project.subdomain %>.<%= config.domain %></span>
+                <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
               <% } %>
             </div>
 
@@ -60,11 +60,11 @@
                     <li class="<%= wt.status %>">
                       <span class="branch-name"><%= wt.branch_name %></span>
                       <% if (wt.status === 'running') { %>
-                        <a href="<%= config.https ? 'https' : 'http' %>://<%= wt.subdomain %>.<%= config.domain %>" target="_blank" class="wt-url">
-                          <%= wt.subdomain %>
+                        <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-url">
+                          <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:///, '') %>
                         </a>
                       <% } else { %>
-                        <span class="wt-url inactive"><%= wt.subdomain %></span>
+                        <span class="wt-url inactive"><%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
                       <% } %>
                       <span class="status-dot <%= wt.status %>"></span>
                     </li>

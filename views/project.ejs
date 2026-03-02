@@ -22,11 +22,11 @@
         <p><strong>Path:</strong> <code><%= project.path %></code></p>
         <p><strong>Subdomain:</strong> 
           <% if (project.status === 'running') { %>
-            <a href="<%= config.https ? 'https' : 'http' %>://<%= project.subdomain %>.<%= config.domain %>" target="_blank">
-              <%= project.subdomain %>.<%= config.domain %>
+            <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
+              <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
             </a>
           <% } else { %>
-            <%= project.subdomain %>.<%= config.domain %>
+            <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
           <% } %>
         </p>
         <% if (project.port) { %>
@@ -65,11 +65,11 @@
                   <td><code><%= wt.branch_name %></code></td>
                   <td>
                     <% if (wt.status === 'running') { %>
-                      <a href="<%= config.https ? 'https' : 'http' %>://<%= wt.subdomain %>.<%= config.domain %>" target="_blank">
-                        <%= wt.subdomain %>.<%= config.domain %>
+                      <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank">
+                        <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                       </a>
                     <% } else { %>
-                      <%= wt.subdomain %>.<%= config.domain %>
+                      <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                     <% } %>
                   </td>
                   <td><span class="status-badge <%= wt.status %>"><%= wt.status %></span></td>
