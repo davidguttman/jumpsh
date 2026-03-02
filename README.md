@@ -135,7 +135,6 @@ The daemon automatically syncs routes every 30 seconds when logged in.
 ## Log Locations
 
 - **Global daemon logs** — `~/.jump.sh/logs/daemon.log` and `daemon.err` (stdout/stderr from the daemon process)
-- **Global dev log** — `~/.jump.sh/logs/dev.log` (structured JSON application log, rotated at 10 MB)
 - **Per-project dev log** — `<project>/.jump.sh/dev.log` (project-specific events: container start/stop/errors)
 
 ## Architecture
