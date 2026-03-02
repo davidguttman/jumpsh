@@ -1,8 +1,20 @@
 /* ============================================
    jump.sh — 16-bit retro terminal-game theme
+   Apple Kid / Chicago bitmap font aesthetic
    ============================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+/* Local slot for Apple Kid or similar bitmap font drop-in.
+   Place AppleKid.woff2 (or .ttf) in /public/fonts/ to activate. */
+@font-face {
+  font-family: 'AppleKid';
+  src: url('/fonts/AppleKid.woff2') format('woff2'),
+       url('/fonts/AppleKid.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -11,24 +23,24 @@
 }
 
 :root {
-  --bg: #2a4a2a;
-  --bg-check-a: #7ec87e;
-  --bg-check-b: #5eb89e;
-  --bg-card: #1a1a24;
-  --bg-card-inner: #222230;
-  --text: #d0d0d0;
-  --text-muted: #777;
-  --text-bright: #fff;
-  --accent-gold: #d4aa00;
-  --accent-cyan: #00d4ff;
-  --accent-green: #44ff44;
-  --accent-red: #ff4444;
-  --accent-magenta: #ff44ff;
-  --accent-yellow: #ffff44;
-  --border-outer: #b8960c;
-  --border-inner: #555;
-  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
-  --font-mono: 'Courier New', 'Lucida Console', monospace;
+  --bg: #4a8868;
+  --bg-check-a: #88d498;
+  --bg-check-b: #5cb8a8;
+  --bg-card: #1a1c28;
+  --bg-card-inner: #22242e;
+  --text: #d0d4d0;
+  --text-muted: #707878;
+  --text-bright: #eef0ee;
+  --accent-gold: #d8c830;
+  --accent-cyan: #48c8f0;
+  --accent-green: #40e840;
+  --accent-red: #f04040;
+  --accent-magenta: #e848e8;
+  --accent-yellow: #e8e040;
+  --border-outer: #c8b828;
+  --border-inner: #505058;
+  --font-pixel: 'AppleKid', 'Silkscreen', 'ChicagoFLF', 'Chicago', 'Charcoal', 'Apple Kid', 'Press Start 2P', monospace;
+  --font-mono: 'AppleKid', 'Silkscreen', 'ChicagoFLF', 'Menlo', 'Courier New', monospace;
 }
 
 body {
@@ -49,7 +61,7 @@ a {
 }
 
 a:hover {
-  color: #44ffff;
+  color: #68e0ff;
   text-decoration: underline;
 }
 
@@ -59,9 +71,8 @@ header {
   justify-content: space-between;
   align-items: center;
   padding: 0.6rem 1.2rem;
-  background: rgba(10, 10, 18, 0.85);
+  background: #181c24;
   border-bottom: 3px solid var(--border-outer);
-  backdrop-filter: blur(4px);
 }
 
 header h1 {
@@ -206,7 +217,7 @@ main {
 }
 
 .project-card.stopped {
-  outline-color: #666;
+  outline-color: #686870;
 }
 
 .project-header {
@@ -364,7 +375,7 @@ main {
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  background: rgba(10, 10, 18, 0.7);
+  background: rgba(24, 28, 36, 0.85);
   border: 3px solid var(--border-outer);
 }
 
