@@ -35,7 +35,7 @@ class DockerManager {
   async start(project) {
     const { id, path: projectPath, name } = project;
 
-    let { composePath } = this.getComposeFile(projectPath);
+    let { composePath, isGenerated } = this.getComposeFile(projectPath);
 
     // No compose file found — try auto-generation
     if (!composePath) {
@@ -81,6 +81,40 @@ class DockerManager {
         }
       } catch (err) {
         return { success: false, error: `Compose generation failed: ${err.message}` };
+      }
+    }
+
+    // Existing auto-generated compose file: refresh it to apply latest generator fixes
+    // (env transforms, port mappings, logging/options), while leaving user-owned root compose files untouched.
+    if (composePath && isGenerated) {
+      const detection = detectProjectType(projectPath);
+      if (detection.error) {
+        return { success: false, error: detection.error };
+      }
+      if (detection.needsManualConfig) {
+        return { success: false, error: detection.message };
+      }
+
+      let assignedPort = project.assigned_port;
+      if (!assignedPort && this.db) {
+        try {
+          assignedPort = await new Promise((resolve, reject) => {
+            this.db.getNextPort((err, port) => err ? reject(err) : resolve(port));
+          });
+          await new Promise((resolve, reject) => {
+            this.db.updateProject(id, { assigned_port: assignedPort }, (err) => err ? reject(err) : resolve());
+          });
+        } catch (err) {
+          return { success: false, error: `Port allocation failed: ${err.message}` };
+        }
+      }
+      if (!assignedPort) assignedPort = 10000;
+
+      try {
+        const refreshed = generateCompose(projectPath, detection, assignedPort, { force: true });
+        composePath = refreshed.composePath;
+      } catch (err) {
+        return { success: false, error: `Compose refresh failed: ${err.message}` };
       }
     }
 
