@@ -13,18 +13,26 @@ class Database {
     const dataDir = path.join(os.homedir(), '.jump.sh');
     fs.mkdirSync(dataDir, { recursive: true });
     const dbPath = path.join(dataDir, 'projects.db');
-    this.db = new (sqlite3.verbose().Database)(dbPath, (err) => {
-      if (err) {
-        console.error('Error opening database:', err.message);
-      } else {
-        console.log('Connected to SQLite database');
-        this.db.run('PRAGMA journal_mode=WAL');
-        this.init();
-      }
+
+    this._ready = new Promise((resolve, reject) => {
+      this.db = new (sqlite3.verbose().Database)(dbPath, (err) => {
+        if (err) {
+          console.error('Error opening database:', err.message);
+          return reject(err);
+        }
+        this.db.run('PRAGMA journal_mode=WAL', () => {
+          this.init(() => resolve());
+        });
+      });
     });
   }
 
-  init() {
+  /** Wait for the database to be fully initialized. */
+  ready() {
+    return this._ready;
+  }
+
+  init(done) {
     // Projects table - minimal, Docker is source of truth for status
     this.db.run(`
       CREATE TABLE IF NOT EXISTS projects (
@@ -40,18 +48,21 @@ class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `);
-
-    // Migration: add assigned_port if table already exists without it
-    this.db.run('ALTER TABLE projects ADD COLUMN assigned_port INTEGER', () => {
-      // Silently ignore "duplicate column" error
+    `, () => {
+      // Migration: add assigned_port if table already exists without it
+      this.db.run('ALTER TABLE projects ADD COLUMN assigned_port INTEGER', () => {
+        // Silently ignore "duplicate column" error
+        done();
+      });
     });
   }
 
   // Port allocation: prefer deterministic range starting at 10000,
   // exclude DB-assigned ports, let get-port verify host availability.
+  // When primary range is exhausted, extends to overflow range with a notice.
   static PORT_RANGE_START = 10000;
   static PORT_RANGE_END = 10999;
+  static PORT_OVERFLOW_END = 11999;
 
   getNextPort(callback) {
     this.db.all(
@@ -60,19 +71,33 @@ class Database {
         if (err) return callback(err);
 
         const usedPorts = new Set((rows || []).map(r => r.assigned_port));
-        // Build exclude set: DB-assigned ports
         const exclude = new Set(usedPorts);
 
         try {
-          const port = await getPort({
-            port: this.constructor.makePortRange(usedPorts),
-            exclude,
-          });
-          if (port < this.constructor.PORT_RANGE_START || port > this.constructor.PORT_RANGE_END) {
+          let candidates = this.constructor.makePortRange(usedPorts, Database.PORT_RANGE_START, Database.PORT_RANGE_END);
+          let extended = false;
+
+          if (candidates.length === 0) {
+            candidates = this.constructor.makePortRange(usedPorts, Database.PORT_RANGE_END + 1, Database.PORT_OVERFLOW_END);
+            extended = true;
+            if (candidates.length === 0) {
+              return callback(new Error(
+                `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
+              ));
+            }
+          }
+
+          const port = await getPort({ port: candidates, exclude });
+          if (port < Database.PORT_RANGE_START || port > Database.PORT_OVERFLOW_END) {
             return callback(new Error(
-              `No free port in range ${this.constructor.PORT_RANGE_START}-${this.constructor.PORT_RANGE_END}`
+              `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
             ));
           }
+
+          if (extended) {
+            console.log(`Notice: Primary port range (10000-10999) exhausted, using overflow range (11000-11999).`);
+          }
+
           callback(null, port);
         } catch (e) {
           callback(e);
@@ -81,10 +106,15 @@ class Database {
     );
   }
 
-  // Generate candidate ports: gaps first, then sequential from max+1
-  static makePortRange(usedPorts) {
+  /** Release a project's assigned port back to the pool. */
+  releasePort(projectId, callback) {
+    this.db.run('UPDATE projects SET assigned_port = NULL WHERE id = ?', [projectId], callback);
+  }
+
+  // Generate candidate ports within a given range, skipping used ports
+  static makePortRange(usedPorts, start, end) {
     const candidates = [];
-    for (let p = Database.PORT_RANGE_START; p <= Database.PORT_RANGE_END && candidates.length < 100; p++) {
+    for (let p = start; p <= end && candidates.length < 100; p++) {
       if (!usedPorts.has(p)) candidates.push(p);
     }
     return candidates;

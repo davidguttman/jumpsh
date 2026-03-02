@@ -41,7 +41,7 @@ open https://my-project.jump.sh
 jumpsh                    Run daemon in foreground
 jumpsh add [path]         Register a project (default: current directory)
 jumpsh remove <name>      Unregister a project
-jumpsh install            Install daemon service + generate TLS certs
+jumpsh install            Install daemon service
 jumpsh install --uninstall  Remove daemon service
 jumpsh ls                 List projects with status
 jumpsh start [name]       Start project containers
@@ -64,16 +64,14 @@ JUMPSH_CERT_PATH=~/.jump.sh/certs
 
 ### HTTPS Setup
 
-TLS certificates are generated automatically by `jumpsh install` using mkcert.
+HTTPS requires cert files at `~/.jump.sh/certs/` (`server.pem` and `server-key.pem`).
+Set `JUMPSH_HTTPS=true` in `.env`. If certs are missing, the server falls back to HTTP.
 
-**Linux only:** Node.js needs permission to bind port 443:
+**Linux only:** To bind port 443, Node.js needs low-port capability:
 ```bash
 scripts/enable-low-port-bind-linux.sh
 ```
-This runs `setcap cap_net_bind_service=+ep` on the node binary (requires sudo).
-macOS does not need this step.
-
-If you prefer not to use a privileged port, set `JUMPSH_PORT=5050`.
+macOS does not need this step. If you prefer not to use a privileged port, set `JUMPSH_PORT=5050`.
 
 ## Project Setup
 

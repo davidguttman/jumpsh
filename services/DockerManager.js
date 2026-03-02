@@ -92,6 +92,38 @@ class DockerManager {
       const status = await this.getStatus(project);
       return { success: true, status };
     } catch (error) {
+      // Detect Docker port conflict and retry once with a new port
+      const portConflict = /[Bb]ind.*?(\d+).*?failed|port is already allocated/.test(error.stderr || error.message);
+      if (portConflict && project.assigned_port && this.db) {
+        console.log(`Port ${project.assigned_port} conflict detected, retrying with a new port...`);
+        try {
+          // Release the old port
+          await new Promise((resolve, reject) => {
+            this.db.releasePort(id, (err) => err ? reject(err) : resolve());
+          });
+          // Get a new port
+          const newPort = await new Promise((resolve, reject) => {
+            this.db.getNextPort((err, port) => err ? reject(err) : resolve(port));
+          });
+          await new Promise((resolve, reject) => {
+            this.db.updateProject(id, { assigned_port: newPort }, (err) => err ? reject(err) : resolve());
+          });
+          // Regenerate compose with new port
+          const detection = detectProjectType(projectPath);
+          generateCompose(projectPath, detection, newPort, { force: true });
+          console.log(`Retrying with port ${newPort}...`);
+          // Retry once
+          await execCompose(
+            ['up', '-d', '--build'],
+            composePath,
+            { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+          );
+          const retryStatus = await this.getStatus(project);
+          return { success: true, status: retryStatus };
+        } catch (retryError) {
+          return { success: false, error: `Port conflict retry failed: ${retryError.message}` };
+        }
+      }
       return { success: false, error: error.message };
     }
   }

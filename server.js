@@ -296,7 +296,7 @@ if (config.https) {
   if (!fs.existsSync(keyPath) || !fs.existsSync(certFile)) {
     console.warn(
       `JUMPSH_HTTPS=true but certs not found at ${config.certPath}\n` +
-      `Run 'jumpsh install' to generate certs via mkcert.\n` +
+      `Place cert files (server.pem and server-key.pem) in ${config.certPath}.\n` +
       `Falling back to HTTP.`
     );
     config.https = false;
