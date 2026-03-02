@@ -180,6 +180,7 @@ function generateComposeYaml(detection, assignedPort) {
   const envVars = [];
   if (detection.type === 'node') {
     envVars.push('      - NODE_ENV=development');
+    envVars.push('      - HOST=0.0.0.0');
   }
   if (detection.type === 'python') {
     envVars.push('      - PYTHONDONTWRITEBYTECODE=1');
