@@ -46,7 +46,7 @@
 body {
   font-family: var(--font-mono);
   background: var(--bg);
-  color: var(--text);
+  
   line-height: 1.6;
   min-height: 100vh;
   /* checkerboard background */
@@ -102,7 +102,7 @@ header nav a,
 header .header-actions a {
   font-family: var(--font-pixel);
   font-size: 0.65rem;
-  color: var(--text);
+  
   text-transform: lowercase;
   letter-spacing: 1px;
 }
@@ -151,10 +151,6 @@ main {
   color: var(--accent-cyan);
   text-decoration: none;
 }
-
-
-
-
 .btn-danger-outline {
   background: transparent;
   border-color: var(--accent-red);
@@ -184,7 +180,7 @@ main {
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
-  color: var(--text);
+  
   padding: 0.5rem 0.75rem;
   margin-bottom: 1.2rem;
 }
@@ -293,7 +289,7 @@ main {
   margin-left: auto;
   font-family: var(--font-pixel);
   font-size: 0.55rem;
-  color: var(--text);
+  
   letter-spacing: 1px;
 }
 
@@ -362,7 +358,7 @@ main {
 
 .status-dot.running {
   background: var(--accent-green);
-  border-color: var(--accent-green);
+  
   box-shadow: 0 0 4px var(--accent-green);
 }
 
@@ -537,8 +533,12 @@ main {
 }
 
 #logs {
+  background: var(--panel-bg);
+  border-radius: 36px;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  
   background: var(--bg-card-inner);
-  color: var(--accent-green);
+  
   padding: 1rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -564,4 +564,18 @@ main {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-gold);
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .project-detail {
+    padding: 0.75rem;
+    border-width: 12px;
+  }
+  #logs {
+    border-radius: 0;
+    padding: 0.5rem;
+    border-width: 12px;
+    font-size: 0.65rem;
+  }
 }
