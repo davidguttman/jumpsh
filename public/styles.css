@@ -455,40 +455,17 @@ main {
 /* ---- Project Detail ---- */
 .project-detail {
   max-width: 900px;
-}
-
-.project-detail .project-header {
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
-  padding: 0.75rem 1.25rem;
-}
-
-.project-detail .project-actions {
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
-  padding: 0.75rem 1.25rem;
-  margin-bottom: 1.5rem;
-}
-
-.project-detail .logs-toolbar {
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
-  padding: 0.5rem 1rem;
-}
-
-.project-info {
   background: var(--panel-bg);
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
   padding: 1.5rem;
-  margin: 1.5rem 0;
+}
+
+.project-info {
+  padding: 0.5rem 0;
+  margin: 1rem 0;
+  border-bottom: 2px dashed var(--border-inner);
 }
 
 .project-info p {
@@ -520,11 +497,7 @@ main {
 .worktrees-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
-  overflow: hidden;
+  background: var(--bg-card-inner);
 }
 
 .worktrees-table th,
@@ -564,12 +537,9 @@ main {
 }
 
 #logs {
-  background: var(--panel-bg);
+  background: var(--bg-card-inner);
   color: var(--accent-green);
   padding: 1rem;
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   max-height: 500px;
@@ -577,7 +547,6 @@ main {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar {
   width: 10px;

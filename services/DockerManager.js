@@ -4,12 +4,21 @@ import path from 'path';
 import net from 'net';
 import { execCompose, buildComposeSpawn } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
-import { generateCompose } from './ComposeGenerator.js';
+import { generateCompose, getJumpshDir } from './ComposeGenerator.js';
 import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
 
 // Timeouts (ms)
 const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
 const DOCKER_CMD_TIMEOUT = 30 * 1000;        // 30s for status/logs/down
+
+/**
+ * Derive a slug from project subdomain or name.
+ * @param {object} project - Project object with subdomain and name
+ * @returns {string} Slug like 'trade-tracker' or 'david-app'
+ */
+function getProjectSlug(project) {
+  return project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+}
 
 class DockerManager {
   constructor(db) {
@@ -19,13 +28,17 @@ class DockerManager {
 
   /**
    * Find the compose file for a project.
-   * Checks: project root docker-compose.yml/yaml, then .jump.sh/docker-compose.yml
+   * Checks: project root docker-compose.yml/yaml, then ~/.jump.sh/{slug}/docker-compose.yml
+   * @param {object} project - Project object with path, subdomain, name
    * @returns {{ composePath: string|null, isGenerated: boolean }}
    */
-  getComposeFile(projectPath) {
+  getComposeFile(project) {
+    const projectPath = project.path;
+    const slug = getProjectSlug(project);
+    
     const rootYml = path.join(projectPath, 'docker-compose.yml');
     const rootYaml = path.join(projectPath, 'docker-compose.yaml');
-    const jumpshYml = path.join(projectPath, '.jump.sh', 'docker-compose.yml');
+    const jumpshYml = path.join(getJumpshDir(slug), 'docker-compose.yml');
 
     if (fs.existsSync(rootYml)) return { composePath: rootYml, isGenerated: false };
     if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isGenerated: false };
@@ -36,8 +49,9 @@ class DockerManager {
 
   async start(project) {
     const { id, path: projectPath, name } = project;
+    const slug = getProjectSlug(project);
 
-    let { composePath, isGenerated } = this.getComposeFile(projectPath);
+    let { composePath, isGenerated } = this.getComposeFile(project);
 
     // No compose file found — try auto-generation
     if (!composePath) {
@@ -74,10 +88,10 @@ class DockerManager {
       if (!assignedPort) assignedPort = 10000;
 
       try {
-        const result = generateCompose(projectPath, detection, assignedPort);
+        const result = generateCompose(projectPath, slug, detection, assignedPort);
         composePath = result.composePath;
         if (result.skipped) {
-          console.log(`Using existing .jump.sh/docker-compose.yml for ${name}`);
+          console.log(`Using existing ~/.jump.sh/${slug}/docker-compose.yml for ${name}`);
         } else {
           console.log(`Auto-generated compose files for ${name} (${detection.type}/${detection.framework || 'generic'}) on port ${assignedPort}`);
         }
@@ -113,7 +127,7 @@ class DockerManager {
       if (!assignedPort) assignedPort = 10000;
 
       try {
-        const refreshed = generateCompose(projectPath, detection, assignedPort, { force: true });
+        const refreshed = generateCompose(projectPath, slug, detection, assignedPort, { force: true });
         composePath = refreshed.composePath;
       } catch (err) {
         return { success: false, error: `Compose refresh failed: ${err.message}` };
@@ -153,7 +167,7 @@ class DockerManager {
           });
           // Regenerate compose with new port
           const detection = detectProjectType(projectPath);
-          generateCompose(projectPath, detection, newPort, { force: true });
+          generateCompose(projectPath, slug, detection, newPort, { force: true });
           console.log(`Retrying with port ${newPort}...`);
           // Retry once
           await execCompose(
@@ -181,7 +195,7 @@ class DockerManager {
 
   async stop(project) {
     const { path: projectPath } = project;
-    const { composePath } = this.getComposeFile(projectPath);
+    const { composePath } = this.getComposeFile(project);
     this.healthStates.set(project.id.toString(), 'unknown');
 
     try {
@@ -201,7 +215,7 @@ class DockerManager {
 
   async getStatus(project) {
     const { path: projectPath } = project;
-    const { composePath } = this.getComposeFile(projectPath);
+    const { composePath } = this.getComposeFile(project);
 
     try {
       const { stdout } = await execCompose(
@@ -254,7 +268,7 @@ class DockerManager {
 
   async getLogs(project, lines = 100) {
     const { path: projectPath } = project;
-    const { composePath } = this.getComposeFile(projectPath);
+    const { composePath } = this.getComposeFile(project);
 
     try {
       const { stdout } = await execCompose(
@@ -270,7 +284,7 @@ class DockerManager {
 
   streamLogs(project, res) {
     const { path: projectPath } = project;
-    const { composePath } = this.getComposeFile(projectPath);
+    const { composePath } = this.getComposeFile(project);
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
