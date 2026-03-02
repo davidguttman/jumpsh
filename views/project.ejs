@@ -18,18 +18,24 @@
     <div class="project-detail">
       <div class="project-header">
         <h2><%= project.name %></h2>
-        <span class="status-badge <%= project.status %>"><%= project.status %></span>
+        <% const health = project.health || 'unknown'; %>
+        <span class="status-badge <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" id="status-badge"><%=
+          health === 'starting' ? 'STARTING...' :
+          health === 'healthy' ? 'RUNNING' :
+          health === 'unhealthy' ? 'FAILED' :
+          project.status === 'running' ? 'RUNNING' : 'STOPPED'
+        %></span>
       </div>
 
       <div class="project-info">
         <p><strong>Path:</strong> <code><%= project.path %></code></p>
-        <p><strong>Subdomain:</strong> 
-          <% if (project.status === 'running') { %>
-            <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
+        <p><strong>Subdomain:</strong>
+          <% if (health === 'healthy') { %>
+            <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank" id="subdomain-link">
               <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
             </a>
           <% } else { %>
-            <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
+            <span id="subdomain-link"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
           <% } %>
         </p>
         <% if (project.port) { %>
@@ -67,7 +73,8 @@
                 <tr>
                   <td><code><%= wt.branch_name %></code></td>
                   <td>
-                    <% if (wt.status === 'running') { %>
+                    <% const wtHealth = wt.health || 'unknown'; %>
+                    <% if (wtHealth === 'healthy') { %>
                       <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank">
                         <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                       </a>
@@ -75,7 +82,12 @@
                       <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                     <% } %>
                   </td>
-                  <td><span class="status-badge <%= wt.status %>"><%= wt.status %></span></td>
+                  <td><span class="status-badge <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"><%=
+                    wtHealth === 'starting' ? 'STARTING...' :
+                    wtHealth === 'healthy' ? 'RUNNING' :
+                    wtHealth === 'unhealthy' ? 'FAILED' :
+                    wt.status === 'running' ? 'RUNNING' : 'STOPPED'
+                  %></span></td>
                   <td>
                     <% if (wt.status === 'running') { %>
                       <button class="btn btn-sm btn-danger" onclick="stopProject(<%= wt.id %>)">Stop</button>
@@ -107,8 +119,30 @@
 
     async function startProject(id) {
       const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
-      if (res.ok) location.reload();
-      else alert('Error starting project');
+      if (res.ok) {
+        pollHealth(id);
+      } else {
+        alert('Error starting project');
+      }
+    }
+
+    function pollHealth(id) {
+      const badge = document.getElementById('status-badge');
+      if (badge) {
+        badge.className = 'status-badge starting';
+        badge.textContent = 'STARTING...';
+      }
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/projects/${id}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.health && data.health !== 'starting') {
+            clearInterval(interval);
+            location.reload();
+          }
+        } catch {}
+      }, 1000);
     }
 
     async function stopProject(id) {
@@ -166,6 +200,11 @@
         btn.textContent = 'Stream Live';
       };
     }
+
+    // Auto-poll if health is 'starting' on page load
+    <% if (health === 'starting') { %>
+    pollHealth(projectId);
+    <% } %>
   </script>
 </body>
 </html>

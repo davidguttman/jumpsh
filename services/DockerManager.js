@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import net from 'net';
 import { execCompose, buildComposeSpawn } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
 import { generateCompose } from './ComposeGenerator.js';
@@ -13,6 +14,7 @@ const DOCKER_CMD_TIMEOUT = 30 * 1000;        // 30s for status/logs/down
 class DockerManager {
   constructor(db) {
     this.db = db;
+    this.healthStates = new Map(); // projectId -> 'unknown' | 'starting' | 'healthy' | 'unhealthy'
   }
 
   /**
@@ -126,6 +128,11 @@ class DockerManager {
       );
       const status = await this.getStatus(project);
       projectInfo(projectPath, 'Container started', { name });
+      const port = await this.getPort(project);
+      if (port) {
+        this.healthStates.set(id.toString(), 'starting');
+        this._probeHealth(project, port);
+      }
       return { success: true, status };
     } catch (error) {
       // Detect Docker port conflict and retry once with a new port
@@ -156,6 +163,11 @@ class DockerManager {
           );
           const retryStatus = await this.getStatus(project);
           projectInfo(projectPath, 'Container started after port retry', { name, port: newPort });
+          const retryPort = await this.getPort(project);
+          if (retryPort) {
+            this.healthStates.set(id.toString(), 'starting');
+            this._probeHealth(project, retryPort);
+          }
           return { success: true, status: retryStatus };
         } catch (retryError) {
           projectError(projectPath, 'Port conflict retry failed', { name, error: retryError.message });
@@ -170,6 +182,7 @@ class DockerManager {
   async stop(project) {
     const { path: projectPath } = project;
     const { composePath } = this.getComposeFile(projectPath);
+    this.healthStates.set(project.id.toString(), 'unknown');
 
     try {
       await execCompose(['down'], composePath, { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT });
@@ -291,6 +304,53 @@ class DockerManager {
     });
 
     return child;
+  }
+  async _probeHealth(project, port) {
+    const id = project.id.toString();
+    const maxAttempts = 120; // 60 seconds at 500ms intervals
+
+    for (let i = 0; i < maxAttempts; i++) {
+      const status = await this.getStatus(project);
+      if (!status.running) {
+        this.healthStates.set(id, 'unknown');
+        return;
+      }
+
+      if (await this._canConnect(port)) {
+        this.healthStates.set(id, 'healthy');
+        console.log(`✓ ${project.name} health check passed on port ${port}`);
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    this.healthStates.set(id, 'unhealthy');
+    console.log(`✗ ${project.name} health check failed after 60s`);
+  }
+
+  async _canConnect(port) {
+    return new Promise(resolve => {
+      const socket = new net.Socket();
+      socket.setTimeout(1000);
+
+      socket.on('connect', () => {
+        socket.destroy();
+        resolve(true);
+      });
+
+      socket.on('error', () => resolve(false));
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve(false);
+      });
+
+      socket.connect(port, '127.0.0.1');
+    });
+  }
+
+  getHealth(projectId) {
+    return this.healthStates.get(projectId?.toString()) || 'unknown';
   }
 }
 

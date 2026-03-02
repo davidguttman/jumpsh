@@ -242,6 +242,24 @@ main {
   background: rgba(100, 100, 100, 0.1);
 }
 
+.status-badge.starting {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  background: rgba(216, 200, 48, 0.1);
+  animation: pulse 1s infinite;
+}
+
+.status-badge.unhealthy {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(240, 64, 64, 0.1);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* ---- Description ---- */
 .description {
   color: var(--text-muted);
@@ -346,6 +364,17 @@ main {
   background: var(--accent-green);
   border-color: var(--accent-green);
   box-shadow: 0 0 4px var(--accent-green);
+}
+
+.status-dot.starting {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  animation: pulse 1s infinite;
+}
+
+.status-dot.unhealthy {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
 }
 
 /* ---- Empty State ---- */

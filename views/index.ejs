@@ -24,10 +24,16 @@
     <% } else { %>
       <div class="project-grid">
         <% for (const project of projects) { %>
+          <% const health = project.health || 'unknown'; %>
           <div class="project-card <%= project.status %>">
             <div class="project-header">
               <h2><a href="/projects/<%= project.id %>"><%= project.name %></a></h2>
-              <span class="status-badge <%= project.status %>"><%= project.status %></span>
+              <span class="status-badge <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" data-project-id="<%= project.id %>"><%=
+                health === 'starting' ? 'STARTING...' :
+                health === 'healthy' ? 'RUNNING' :
+                health === 'unhealthy' ? 'FAILED' :
+                project.status === 'running' ? 'RUNNING' : 'STOPPED'
+              %></span>
             </div>
 
             <% if (project.description) { %>
@@ -35,7 +41,7 @@
             <% } %>
 
             <div class="project-url">
-              <% if (project.status === 'running') { %>
+              <% if (health === 'healthy') { %>
                 <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
                   <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                 </a>
@@ -59,16 +65,17 @@
                 <h4>Worktrees (<%= worktrees.length %>)</h4>
                 <ul>
                   <% for (const wt of worktrees) { %>
+                    <% const wtHealth = wt.health || 'unknown'; %>
                     <li class="<%= wt.status %>">
                       <span class="branch-name"><%= wt.branch_name %></span>
-                      <% if (wt.status === 'running') { %>
+                      <% if (wtHealth === 'healthy') { %>
                         <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-url">
                           <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                         </a>
                       <% } else { %>
                         <span class="wt-url inactive"><%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
                       <% } %>
-                      <span class="status-dot <%= wt.status %>"></span>
+                      <span class="status-dot <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"></span>
                     </li>
                   <% } %>
                 </ul>
@@ -86,10 +93,17 @@
       btn.disabled = true;
       btn.textContent = 'Starting...';
 
+      // Update the badge immediately
+      const badge = document.querySelector(`[data-project-id="${id}"]`);
+      if (badge) {
+        badge.className = 'status-badge starting';
+        badge.textContent = 'STARTING...';
+      }
+
       try {
         const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
         if (res.ok) {
-          location.reload();
+          pollHealth(id);
         } else {
           const data = await res.json();
           alert('Error: ' + data.error);
@@ -101,6 +115,20 @@
         btn.disabled = false;
         btn.textContent = 'Start';
       }
+    }
+
+    function pollHealth(id) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/projects/${id}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.health && data.health !== 'starting') {
+            clearInterval(interval);
+            location.reload();
+          }
+        } catch {}
+      }, 1000);
     }
 
     async function stopProject(id) {

@@ -89,7 +89,8 @@ app.get('/', async (req, res) => {
       (projects || []).map(async (project) => {
         const status = await docker.getStatus(project);
         const port = status.running ? await docker.getPort(project) : null;
-        return { ...project, status: status.running ? 'running' : 'stopped', port };
+        const health = docker.getHealth(project.id);
+        return { ...project, status: status.running ? 'running' : 'stopped', port, health };
       })
     );
 
@@ -156,6 +157,7 @@ app.get('/projects/:id', (req, res) => {
 
     const status = await docker.getStatus(project);
     const port = status.running ? await docker.getPort(project) : null;
+    const health = docker.getHealth(project.id);
     const logs = await docker.getLogs(project, 200);
 
     db.getWorktreesForProject(id, async (err, worktrees) => {
@@ -164,12 +166,13 @@ app.get('/projects/:id', (req, res) => {
         (worktrees || []).map(async (wt) => {
           const wtStatus = await docker.getStatus(wt);
           const wtPort = wtStatus.running ? await docker.getPort(wt) : null;
-          return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort };
+          const wtHealth = docker.getHealth(wt.id);
+          return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort, health: wtHealth };
         })
       );
 
-      res.render('project', { 
-        project: { ...project, status: status.running ? 'running' : 'stopped', port },
+      res.render('project', {
+        project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
         worktrees: worktreesWithStatus,
         logs,
         config
@@ -189,7 +192,7 @@ app.post('/projects/:id/start', (req, res) => {
 
     const result = await docker.start(project);
     if (result.success) {
-      res.json({ success: true, status: result.status });
+      res.json({ success: true, status: result.status, health: docker.getHealth(project.id) });
     } else {
       res.status(500).json({ error: result.error });
     }
@@ -253,11 +256,26 @@ app.get('/api/projects', async (req, res) => {
       (projects || []).map(async (project) => {
         const status = await docker.getStatus(project);
         const port = status.running ? await docker.getPort(project) : null;
-        return { ...project, status: status.running ? 'running' : 'stopped', port };
+        const health = docker.getHealth(project.id);
+        return { ...project, status: status.running ? 'running' : 'stopped', port, health };
       })
     );
 
     res.json(projectsWithStatus);
+  });
+});
+
+// API: Get single project with status and health
+app.get('/api/projects/:id', (req, res) => {
+  const { id } = req.params;
+  db.getProject(id, async (err, project) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const status = await docker.getStatus(project);
+    const port = status.running ? await docker.getPort(project) : null;
+    const health = docker.getHealth(project.id);
+    res.json({ ...project, status: status.running ? 'running' : 'stopped', port, health });
   });
 });
 
