@@ -67,7 +67,7 @@ class SubdomainProxy {
         }
 
         // Get or create proxy for this port
-        const proxy = this.getOrCreateProxy(port);
+        const proxy = this.getOrCreateProxy(port, project);
         return proxy(req, res, next);
       });
     };
@@ -103,19 +103,44 @@ class SubdomainProxy {
            subdomain === this.config.domain.split('.')[0];
   }
 
-  getOrCreateProxy(port) {
+  getOrCreateProxy(port, project = null) {
     const cacheKey = `port-${port}`;
     
     if (!this.proxyCache.has(cacheKey)) {
+      const projectName = project?.name || 'unknown';
       const proxy = createProxyMiddleware({
         target: `http://localhost:${port}`,
         changeOrigin: true,
         ws: true,
         logLevel: 'silent',
         onError: (err, req, res) => {
-          console.error(`Proxy error for port ${port}:`, err.message);
+          console.error(`Proxy error for ${projectName} (port ${port}):`, err.message);
           if (!res.headersSent) {
-            res.status(502).send('Proxy error - container may still be starting');
+            const isConnectionRefused = err.code === 'ECONNREFUSED';
+            const errorHtml = `
+              <html>
+                <head><title>502 - Connection Failed</title></head>
+                <body style="font-family: system-ui; padding: 40px; max-width: 600px; margin: 0 auto;">
+                  <h1>502 - Connection Failed</h1>
+                  <p>Could not connect to <strong>${projectName}</strong> on port ${port}.</p>
+                  ${isConnectionRefused ? `
+                  <h3>Possible causes:</h3>
+                  <ul>
+                    <li><strong>Port mismatch</strong> — App may be listening on a different port internally</li>
+                    <li><strong>Still starting</strong> — Container may need more time to boot</li>
+                    <li><strong>Crashed</strong> — Check container logs for errors</li>
+                  </ul>
+                  <h3>Debug steps:</h3>
+                  <pre style="background: #f5f5f5; padding: 10px; overflow-x: auto;"># Check container logs
+docker compose -f .jump.sh/docker-compose.yml logs
+
+# Check what port app is listening on
+docker compose -f .jump.sh/docker-compose.yml exec app ss -tlnp</pre>
+                  ` : `<p>Error: ${err.message}</p>`}
+                </body>
+              </html>
+            `;
+            res.status(502).send(errorHtml);
           }
         }
       });
