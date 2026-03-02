@@ -110,6 +110,22 @@ class Database {
     this.db.get('SELECT * FROM projects WHERE subdomain = ?', [subdomain.toLowerCase()], callback);
   }
 
+  getProjectByName(name, callback) {
+    this.db.get('SELECT * FROM projects WHERE name = ? AND is_worktree = 0', [name], callback);
+  }
+
+  getProjectByPath(projectPath, callback) {
+    this.db.get('SELECT * FROM projects WHERE path = ?', [projectPath], callback);
+  }
+
+  findProject(nameOrSubdomain, callback) {
+    this.getProjectByName(nameOrSubdomain, (err, project) => {
+      if (err) return callback(err);
+      if (project) return callback(null, project);
+      this.getProjectBySubdomain(nameOrSubdomain, callback);
+    });
+  }
+
   getAllProjects(callback) {
     this.db.all('SELECT * FROM projects WHERE is_worktree = 0 ORDER BY name', callback);
   }
@@ -165,6 +181,10 @@ class Database {
 
   deleteWorktree(path, callback) {
     this.db.run('DELETE FROM projects WHERE path = ? AND is_worktree = 1', [path], callback);
+  }
+
+  close(callback) {
+    this.db.close(callback || (() => {}));
   }
 }
 
