@@ -8,8 +8,11 @@
 </head>
 <body>
   <header>
-    <h1>🏠 jump.sh</h1>
-    <a href="/add" class="btn btn-primary">+ Add Project</a>
+    <h1>HOMEBASE</h1>
+    <nav>
+      <a href="/add">new</a>
+      <a href="/">dashboard</a>
+    </nav>
   </header>
 
   <main>
@@ -27,11 +30,11 @@
               <h2><a href="/projects/<%= project.id %>"><%= project.name %></a></h2>
               <span class="status-badge <%= project.status %>"><%= project.status %></span>
             </div>
-            
+
             <% if (project.description) { %>
               <p class="description"><%= project.description %></p>
             <% } %>
-            
+
             <div class="project-url">
               <% if (project.status === 'running') { %>
                 <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
@@ -48,7 +51,7 @@
               <% } else { %>
                 <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
               <% } %>
-              <a href="/projects/<%= project.id %>" class="btn">Details</a>
+              <a href="/projects/<%= project.id %>" class="detail-link">detail</a>
             </div>
 
             <% const worktrees = worktreesByParent[project.id] || []; %>
@@ -83,7 +86,7 @@
       const btn = event.target;
       btn.disabled = true;
       btn.textContent = 'Starting...';
-      
+
       try {
         const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
         if (res.ok) {
@@ -105,7 +108,7 @@
       const btn = event.target;
       btn.disabled = true;
       btn.textContent = 'Stopping...';
-      
+
       try {
         const res = await fetch(`/projects/${id}/stop`, { method: 'POST' });
         if (res.ok) {
