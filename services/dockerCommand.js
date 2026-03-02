@@ -4,6 +4,31 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 let _composeCommand = null;
+let _dockerAvailable = null;
+
+/**
+ * Check if docker daemon is reachable.
+ */
+export function isDockerAvailable() {
+  if (_dockerAvailable !== null) return _dockerAvailable;
+  try {
+    execSync('docker info', { stdio: 'ignore', timeout: 5000 });
+    _dockerAvailable = true;
+  } catch {
+    _dockerAvailable = false;
+  }
+  return _dockerAvailable;
+}
+
+/**
+ * Require Docker to be available. If not, prints an error and exits with code 5.
+ */
+export function requireDocker() {
+  if (!isDockerAvailable()) {
+    console.error('Docker is not available. Ensure Docker is installed and the daemon is running.');
+    process.exit(5);
+  }
+}
 
 /**
  * Detect whether `docker compose` (v2 plugin) or `docker-compose` (v1 standalone)

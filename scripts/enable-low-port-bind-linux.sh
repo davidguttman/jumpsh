@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # enable-low-port-bind-linux.sh — Grant Node.js capability to bind ports < 1024
-# Required for LOCALHAUS_PORT=443 (no-port HTTPS UX) on Linux.
+# Required for JUMPSH_PORT=443 (no-port HTTPS UX) on Linux.
 # Uses setcap(8) — requires sudo.
 #
 # Handles version managers (mise, nvm, fnm, volta) where `which node` may
@@ -117,4 +117,4 @@ getcap "${NODE_REAL}"
 
 echo ""
 echo "Done. Node can now bind to ports < 1024 (e.g., 443)."
-echo "Set LOCALHAUS_PORT=443 in .env for no-port HTTPS."
+echo "Set JUMPSH_PORT=443 in .env for no-port HTTPS."

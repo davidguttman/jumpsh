@@ -16,19 +16,19 @@ class DockerManager {
 
   /**
    * Find the compose file for a project.
-   * Checks: project root docker-compose.yml/yaml, then .localhaus/docker-compose.yml
-   * @returns {{ composePath: string|null, isLocalhaus: boolean }}
+   * Checks: project root docker-compose.yml/yaml, then .jump.sh/docker-compose.yml
+   * @returns {{ composePath: string|null, isGenerated: boolean }}
    */
   getComposeFile(projectPath) {
     const rootYml = path.join(projectPath, 'docker-compose.yml');
     const rootYaml = path.join(projectPath, 'docker-compose.yaml');
-    const localhausYml = path.join(projectPath, '.localhaus', 'docker-compose.yml');
+    const jumpshYml = path.join(projectPath, '.jump.sh', 'docker-compose.yml');
 
-    if (fs.existsSync(rootYml)) return { composePath: rootYml, isLocalhaus: false };
-    if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isLocalhaus: false };
-    if (fs.existsSync(localhausYml)) return { composePath: localhausYml, isLocalhaus: true };
+    if (fs.existsSync(rootYml)) return { composePath: rootYml, isGenerated: false };
+    if (fs.existsSync(rootYaml)) return { composePath: rootYaml, isGenerated: false };
+    if (fs.existsSync(jumpshYml)) return { composePath: jumpshYml, isGenerated: true };
 
-    return { composePath: null, isLocalhaus: false };
+    return { composePath: null, isGenerated: false };
   }
 
   async start(project) {
@@ -74,7 +74,7 @@ class DockerManager {
         const result = generateCompose(projectPath, detection, assignedPort);
         composePath = result.composePath;
         if (result.skipped) {
-          console.log(`Using existing .localhaus/docker-compose.yml for ${name}`);
+          console.log(`Using existing .jump.sh/docker-compose.yml for ${name}`);
         } else {
           console.log(`Auto-generated compose files for ${name} (${detection.type}/${detection.framework || 'generic'}) on port ${assignedPort}`);
         }
@@ -92,6 +92,38 @@ class DockerManager {
       const status = await this.getStatus(project);
       return { success: true, status };
     } catch (error) {
+      // Detect Docker port conflict and retry once with a new port
+      const portConflict = /[Bb]ind.*?(\d+).*?failed|port is already allocated/.test(error.stderr || error.message);
+      if (portConflict && project.assigned_port && this.db) {
+        console.log(`Port ${project.assigned_port} conflict detected, retrying with a new port...`);
+        try {
+          // Release the old port
+          await new Promise((resolve, reject) => {
+            this.db.releasePort(id, (err) => err ? reject(err) : resolve());
+          });
+          // Get a new port
+          const newPort = await new Promise((resolve, reject) => {
+            this.db.getNextPort((err, port) => err ? reject(err) : resolve(port));
+          });
+          await new Promise((resolve, reject) => {
+            this.db.updateProject(id, { assigned_port: newPort }, (err) => err ? reject(err) : resolve());
+          });
+          // Regenerate compose with new port
+          const detection = detectProjectType(projectPath);
+          generateCompose(projectPath, detection, newPort, { force: true });
+          console.log(`Retrying with port ${newPort}...`);
+          // Retry once
+          await execCompose(
+            ['up', '-d', '--build'],
+            composePath,
+            { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+          );
+          const retryStatus = await this.getStatus(project);
+          return { success: true, status: retryStatus };
+        } catch (retryError) {
+          return { success: false, error: `Port conflict retry failed: ${retryError.message}` };
+        }
+      }
       return { success: false, error: error.message };
     }
   }

@@ -1,6 +1,5 @@
 node_modules/
-localhaus.db
-localhaus.log
+.jump.sh/
 .env
 *.sync-conflict-*
 .DS_Store

@@ -7,10 +7,13 @@ import https from 'https';
 import fs from 'fs';
 import os from 'os';
 
+import net from 'net';
 import Database from './database.js';
 import DockerManager from './services/DockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
+import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
+import { RemoteSyncer } from './lib/remote/syncer.js';
 
 dotenv.config();
 
@@ -26,14 +29,14 @@ function resolvePath(p) {
 }
 
 const certPath = resolvePath(
-  process.env.LOCALHAUS_CERT_PATH || '~/.localhaus/certs'
+  process.env.JUMPSH_CERT_PATH || '~/.jump.sh/certs'
 );
 
 // Config
 const config = {
-  port: parseInt(process.env.LOCALHAUS_PORT, 10) || 5050,
-  domain: process.env.LOCALHAUS_DOMAIN || 'localhaus',
-  https: process.env.LOCALHAUS_HTTPS === 'true',
+  port: parseInt(process.env.JUMPSH_PORT, 10) || 5050,
+  domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
+  https: process.env.JUMPSH_HTTPS === 'true',
   certPath
 };
 
@@ -54,6 +57,8 @@ const db = new Database();
 const docker = new DockerManager(db);
 const worktreeScanner = new WorktreeScanner(db);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
+const remoteSyncer = new RemoteSyncer();
+subdomainProxy.setRemoteSyncer(remoteSyncer);
 
 const app = express();
 
@@ -253,17 +258,48 @@ app.get('/api/projects', async (req, res) => {
   });
 });
 
+// ============ Port Conflict Detection ============
+
+function probePort(port) {
+  return new Promise((resolve, reject) => {
+    const tester = net.createServer();
+    tester.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') return reject(err);
+      reject(err);
+    });
+    tester.once('listening', () => {
+      tester.close(() => resolve());
+    });
+    tester.listen(port);
+  });
+}
+
+async function identifyPortHolder(port) {
+  const { execSync } = await import('child_process');
+  try {
+    const pid = execSync(`lsof -i :${port} -t 2>/dev/null`, { encoding: 'utf8' }).trim().split('\n')[0];
+    if (!pid) return null;
+    let name = '';
+    try {
+      name = execSync(`ps -p ${pid} -o comm= 2>/dev/null`, { encoding: 'utf8' }).trim();
+    } catch {}
+    return { pid, name };
+  } catch {
+    return null;
+  }
+}
+
 // ============ Start Server ============
 
 let server;
 if (config.https) {
-  const keyPath = path.join(config.certPath, 'localhost-key.pem');
-  const certFile = path.join(config.certPath, 'localhost.pem');
+  const keyPath = path.join(config.certPath, 'server-key.pem');
+  const certFile = path.join(config.certPath, 'server.pem');
 
   if (!fs.existsSync(keyPath) || !fs.existsSync(certFile)) {
     console.warn(
-      `LOCALHAUS_HTTPS=true but certs not found at ${config.certPath}\n` +
-      `Run scripts/setup-macos.sh or scripts/setup-linux.sh first.\n` +
+      `JUMPSH_HTTPS=true but certs not found at ${config.certPath}\n` +
+      `Place cert files (server.pem and server-key.pem) in ${config.certPath}.\n` +
       `Falling back to HTTP.`
     );
     config.https = false;
@@ -279,13 +315,44 @@ if (config.https) {
   server = http.createServer(app);
 }
 
+// Check port availability before binding
+try {
+  await probePort(config.port);
+} catch (err) {
+  if (err.code === 'EADDRINUSE') {
+    const holder = await identifyPortHolder(config.port);
+    if (holder) {
+      const isJumpsh = holder.name === 'node' || holder.name === 'jumpsh';
+      if (isJumpsh) {
+        console.error(`Port ${config.port} is already in use by PID ${holder.pid}. Is the jump.sh daemon already running?`);
+      } else {
+        console.error(`Port ${config.port} is in use by process ${holder.pid} (${holder.name}). Set JUMPSH_PORT=<other> or stop the conflicting process.`);
+      }
+    } else {
+      console.error(`Port ${config.port} is already in use.`);
+    }
+    deverror('Port conflict', { port: config.port, holder });
+    process.exit(4);
+  }
+  throw err;
+}
+
+// Rotate logs on startup
+rotateLogs();
+
+// Schedule periodic log rotation (every 6 hours)
+const LOG_ROTATION_INTERVAL = 6 * 60 * 60 * 1000;
+const rotationTimer = setInterval(rotateLogs, LOG_ROTATION_INTERVAL);
+rotationTimer.unref();
+
 const protocol = config.https ? 'https' : 'http';
-const dashboardUrl = formatUrl(`localhaus.${config.domain}`);
+const dashboardUrl = formatUrl(`dashboard.${config.domain}`);
 
 server.listen(config.port, () => {
+  devinfo('Server started', { port: config.port, protocol, domain: config.domain });
   console.log(`
 ╔═══════════════════════════════════════════╗
-║           🏠 Localhaus v0.1.0             ║
+║            jump.sh v0.1.0                 ║
 ╠═══════════════════════════════════════════╣
 ║  Dashboard: ${dashboardUrl}
 ║  Projects:  ${formatUrl(`*.${config.domain}`)}
@@ -295,18 +362,49 @@ server.listen(config.port, () => {
 
   // Start watching all projects for worktrees
   worktreeScanner.scanAllProjects();
+
+  // Start remote route sync (loads cache + periodic refresh if logged in)
+  remoteSyncer.start();
 });
 
-// Cleanup on shutdown
-process.on('SIGTERM', () => {
-  console.log('Shutting down...');
-  worktreeScanner.cleanup();
-  server.close();
-});
+// ============ Signal Handling ============
 
-process.on('SIGINT', () => {
-  console.log('Shutting down...');
-  worktreeScanner.cleanup();
-  server.close();
+let shuttingDown = false;
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  console.log(`Received ${signal}, shutting down...`);
+  devinfo('Shutdown initiated', { signal });
+
+  // Force-kill timeout
+  const forceTimer = setTimeout(() => {
+    deverror('Graceful shutdown timed out, forcing exit');
+    process.exit(1);
+  }, 10_000);
+  forceTimer.unref();
+
+  try {
+    server.close();
+    worktreeScanner.cleanup();
+    remoteSyncer.stop();
+    clearInterval(rotationTimer);
+    await new Promise((resolve) => db.close(resolve));
+    devinfo('Shutdown complete');
+  } catch (err) {
+    deverror('Error during shutdown', { error: err.message });
+  }
+
   process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+process.on('SIGHUP', () => {
+  console.log('Received SIGHUP, rescanning worktrees + remote routes...');
+  devinfo('SIGHUP received, rescanning worktrees and remote routes');
+  worktreeScanner.scanAllProjects();
+  remoteSyncer.refresh();
 });
