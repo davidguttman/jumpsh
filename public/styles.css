@@ -72,7 +72,7 @@ header {
   align-items: center;
   padding: 0.6rem 1.2rem;
   background: #181c24;
-  border-bottom: 3px solid var(--border-outer);
+  border-bottom: 3px solid var(--border-inner);
 }
 
 header h1 {
