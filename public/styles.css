@@ -28,6 +28,7 @@
   --bg-check-b: #68a8d8;
   --bg-card: #1a1c28;
   --bg-card-inner: #22242e;
+  --panel-bg: #1c1c1c;
   --text: #d0d4d0;
   --text-muted: #707878;
   --text-bright: #eef0ee;
@@ -71,7 +72,7 @@ header {
   justify-content: space-between;
   align-items: center;
   padding: 0.6rem 1.2rem;
-  background: #181c24;
+  background: var(--panel-bg);
   border-style: solid;
   border-width: 0 0 24px 0;
   border-color: transparent;
@@ -180,7 +181,7 @@ main {
 
 /* ---- Project Card ---- */
 .project-card {
-  background-color: #161616;
+  background-color: var(--panel-bg);
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
@@ -372,7 +373,7 @@ main {
 .form-container {
   max-width: 600px;
   margin: 0 auto;
-  background: var(--bg-card);
+  background: var(--panel-bg);
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
@@ -398,7 +399,7 @@ main {
   width: 100%;
   padding: 0.6rem;
   border: 2px solid var(--border-inner);
-  background: #0a0a12;
+  background: var(--panel-bg);
   color: var(--accent-cyan);
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -429,7 +430,7 @@ main {
 }
 
 .project-info {
-  background: var(--bg-card);
+  background: var(--panel-bg);
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
@@ -466,7 +467,7 @@ main {
 .worktrees-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--bg-card);
+  background: var(--panel-bg);
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
@@ -510,7 +511,7 @@ main {
 }
 
 #logs {
-  background: #0a0a12;
+  background: var(--panel-bg);
   color: var(--accent-green);
   padding: 1rem;
   border: 24px solid;
@@ -531,7 +532,7 @@ main {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-card);
+  background: var(--panel-bg);
 }
 
 ::-webkit-scrollbar-thumb {
