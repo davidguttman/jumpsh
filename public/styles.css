@@ -72,7 +72,13 @@ header {
   align-items: center;
   padding: 0.6rem 1.2rem;
   background: #181c24;
-  border-bottom: 3px solid var(--border-inner);
+  border-bottom: 1px solid #e6f7ff;
+  box-shadow:
+    0 2px 0 #6ec9d9,
+    0 3px 0 #4f7f98,
+    0 4px 0 #2f4b60,
+    0 5px 0 #1b2f3f,
+    0 6px 0 #0b141b;
 }
 
 header h1 {
