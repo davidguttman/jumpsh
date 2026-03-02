@@ -48,6 +48,14 @@ export function generateCompose(projectPath, detection, assignedPort, opts = {})
     } catch { /* best effort */ }
   }
 
+  // Ensure env files exist (docker-compose requires them when listed in env_file)
+  if (!fs.existsSync(projectEnvPath)) {
+    fs.writeFileSync(projectEnvPath, '# Project environment variables\n');
+  }
+  if (!fs.existsSync(transformedEnvPath)) {
+    fs.writeFileSync(transformedEnvPath, '# Docker-specific environment variables\n');
+  }
+
   // Write .dockerignore in project root to exclude large/irrelevant directories
   const dockerignorePath = path.join(projectPath, '.dockerignore');
   if (!fs.existsSync(dockerignorePath)) {
