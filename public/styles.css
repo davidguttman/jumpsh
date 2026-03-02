@@ -731,8 +731,12 @@ main {
   }
 
   .column-browser .column {
-    min-width: 140px;
-    max-width: 140px;
+    min-width: 160px;
+    max-width: 160px;
+  }
+
+  .column-item {
+    font-size: 0.7rem;
   }
 
   .column-browser {

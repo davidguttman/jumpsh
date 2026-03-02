@@ -204,8 +204,26 @@
         browser.appendChild(colEl)
       }
 
-      // Auto-scroll to the right
-      browser.scrollLeft = browser.scrollWidth
+      // Scroll so the selected column stays visible with the new column beside it
+      scrollToSelectedColumn()
+    }
+
+    function scrollToSelectedColumn() {
+      // Find the last column with a selection
+      var selectedIdx = -1
+      for (var i = 0; i < columns.length; i++) {
+        if (columns[i].selected !== undefined) selectedIdx = i
+      }
+      if (selectedIdx < 0) {
+        browser.scrollLeft = 0
+        return
+      }
+      // Scroll so the selected column's left edge is visible,
+      // which naturally shows the child column to its right
+      var colEls = browser.querySelectorAll('.column')
+      if (colEls[selectedIdx]) {
+        colEls[selectedIdx].scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'smooth' })
+      }
     }
 
     function onItemClick(e) {
