@@ -7,8 +7,7 @@
    Place AppleKid.woff2 (or .ttf) in /public/fonts/ to activate. */
 @font-face {
   font-family: 'AppleKid';
-  src: url('/fonts/AppleKid.woff2') format('woff2'),
-       url('/fonts/AppleKid.ttf') format('truetype');
+  src: url('/fonts/AppleKid.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -427,6 +426,31 @@ main {
 /* ---- Project Detail ---- */
 .project-detail {
   max-width: 900px;
+}
+
+.project-detail .project-header {
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
+  padding: 0.75rem 1.25rem;
+}
+
+.project-detail .project-actions {
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.project-detail .logs-toolbar {
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
+  padding: 0.5rem 1rem;
 }
 
 .project-info {
