@@ -14,6 +14,7 @@ import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { RemoteSyncer } from './lib/remote/syncer.js';
+import { certsExist, downloadCerts } from './lib/commands/certs.js';
 
 dotenv.config();
 
@@ -37,7 +38,8 @@ const config = {
   port: parseInt(process.env.JUMPSH_PORT, 10) || 4443,
   domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
   https: process.env.JUMPSH_HTTPS !== 'false',
-  certPath
+  certPath,
+  dashboardHost: process.env.JUMPSH_DASHBOARD_HOST || `dash.${process.env.JUMPSH_DOMAIN || 'jump.sh'}`
 };
 
 /**
@@ -291,6 +293,15 @@ async function identifyPortHolder(port) {
 
 // ============ Start Server ============
 
+if (config.https && !certsExist()) {
+  console.warn(`HTTPS enabled and certs missing at ${config.certPath}; downloading from jump.sh...`);
+  try {
+    await downloadCerts();
+  } catch (e) {
+    console.error(`Automatic cert download failed: ${e.message}`);
+  }
+}
+
 let server;
 if (config.https) {
   const keyPath = path.join(config.certPath, 'server-key.pem');
@@ -346,7 +357,7 @@ const rotationTimer = setInterval(rotateLogs, LOG_ROTATION_INTERVAL);
 rotationTimer.unref();
 
 const protocol = config.https ? 'https' : 'http';
-const dashboardUrl = formatUrl(`dashboard.${config.domain}`);
+const dashboardUrl = formatUrl(config.dashboardHost);
 
 server.listen(config.port, () => {
   devinfo('Server started', { port: config.port, protocol, domain: config.domain });
