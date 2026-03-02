@@ -41,8 +41,9 @@ open https://my-project.jump.sh
 jumpsh                    Run daemon in foreground
 jumpsh add [path]         Register a project (default: current directory)
 jumpsh remove <name>      Unregister a project
-jumpsh install            Install daemon service
+jumpsh install            Install daemon service + download certs
 jumpsh install --uninstall  Remove daemon service
+jumpsh certs              Download TLS certificates
 jumpsh ls                 List projects with status
 jumpsh start [name]       Start project containers
 jumpsh stop [name]        Stop project containers
@@ -64,8 +65,16 @@ JUMPSH_CERT_PATH=~/.jump.sh/certs
 
 ### HTTPS Setup
 
-HTTPS requires cert files at `~/.jump.sh/certs/` (`server.pem` and `server-key.pem`).
-Set `JUMPSH_HTTPS=true` in `.env`. If certs are missing, the server falls back to HTTP.
+Certificates are downloaded from the jump.sh server:
+
+```bash
+jumpsh certs
+```
+
+This fetches `server.pem` and `server-key.pem` into `~/.jump.sh/certs/`.
+`jumpsh install` also downloads certs automatically when `JUMPSH_HTTPS=true`.
+
+The download endpoint is configurable via `JUMPSH_ORIGIN` (default: `https://jump.sh`).
 
 **Linux only:** To bind port 443, Node.js needs low-port capability:
 ```bash
