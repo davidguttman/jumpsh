@@ -1,5 +1,5 @@
 {
-  "name": "jumpsh",
+  "name": "jump.sh",
   "version": "0.1.0",
   "type": "module",
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
