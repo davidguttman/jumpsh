@@ -47,6 +47,44 @@
         <% } %>
       </div>
 
+      <div class="settings-section">
+        <button class="settings-toggle" id="settings-toggle" onclick="toggleSettings()">settings</button>
+        <div class="settings-panel" id="settings-panel" style="display: none;">
+          <h3>Command Overrides</h3>
+          <p class="settings-hint">Leave empty to use auto-detected values.</p>
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="override_build_command">Build Command</label>
+              <input type="text" id="override_build_command"
+                value="<%= project.override_build_command || '' %>"
+                placeholder="<%= detection.installCommand || 'auto-detect' %>">
+            </div>
+            <div class="form-group">
+              <label for="override_start_command">Start Command</label>
+              <input type="text" id="override_start_command"
+                value="<%= project.override_start_command || '' %>"
+                placeholder="<%= detection.devCommand || 'auto-detect' %>">
+            </div>
+            <div class="form-group">
+              <label for="override_port">Port</label>
+              <input type="number" id="override_port"
+                value="<%= project.override_port || '' %>"
+                placeholder="<%= detection.port || 'auto-detect' %>">
+            </div>
+            <div class="form-group">
+              <label for="override_docker_image">Docker Image</label>
+              <input type="text" id="override_docker_image"
+                value="<%= project.override_docker_image || '' %>"
+                placeholder="auto">
+            </div>
+            <div class="settings-actions">
+              <button class="btn" id="save-settings-btn" onclick="saveSettings()">Save</button>
+              <span class="settings-feedback" id="settings-feedback"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="project-actions">
         <% if (project.status === 'running') { %>
           <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
@@ -220,6 +258,56 @@
         eventSource = null;
         btn.textContent = 'Stream Live';
       };
+    }
+
+    function toggleSettings() {
+      var panel = document.getElementById('settings-panel');
+      var btn = document.getElementById('settings-toggle');
+      if (panel.style.display === 'none') {
+        panel.style.display = '';
+        btn.textContent = 'hide settings';
+      } else {
+        panel.style.display = 'none';
+        btn.textContent = 'settings';
+      }
+    }
+
+    async function saveSettings() {
+      var feedback = document.getElementById('settings-feedback');
+      var btn = document.getElementById('save-settings-btn');
+      btn.disabled = true;
+      feedback.textContent = '';
+      feedback.className = 'settings-feedback';
+
+      var body = {};
+      var fields = ['override_build_command', 'override_start_command', 'override_docker_image'];
+      for (var i = 0; i < fields.length; i++) {
+        var val = document.getElementById(fields[i]).value.trim();
+        body[fields[i]] = val || null;
+      }
+      var portVal = document.getElementById('override_port').value.trim();
+      body.override_port = portVal ? parseInt(portVal, 10) : null;
+
+      try {
+        var res = await fetch('/api/projects/' + projectId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          feedback.textContent = 'Saved';
+          feedback.className = 'settings-feedback success';
+        } else {
+          var data = await res.json();
+          feedback.textContent = data.error || 'Error';
+          feedback.className = 'settings-feedback error';
+        }
+      } catch (e) {
+        feedback.textContent = e.message;
+        feedback.className = 'settings-feedback error';
+      }
+      btn.disabled = false;
+      setTimeout(function() { feedback.textContent = ''; }, 3000);
     }
 
     // Subscribe to startup progress if health is 'starting' on page load

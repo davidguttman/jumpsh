@@ -13,6 +13,7 @@ import Database from './database.js';
 import DockerManager from './services/DockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
+import { detectProjectType } from './services/ProjectDetector.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { RemoteSyncer } from './lib/remote/syncer.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
@@ -204,6 +205,7 @@ app.get('/projects/:id', (req, res) => {
     const port = status.running ? await docker.getPort(project) : null;
     const health = docker.getHealthWithProbe(project, status);
     const logs = await docker.getLogs(project, 200);
+    const detection = detectProjectType(project.path);
 
     db.getWorktreesForProject(id, async (err, worktrees) => {
       // Get status for worktrees too
@@ -220,6 +222,7 @@ app.get('/projects/:id', (req, res) => {
         project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
         worktrees: worktreesWithStatus,
         logs,
+        detection,
         config: req.requestConfig
       });
     });
@@ -365,6 +368,37 @@ app.delete('/projects/:id', async (req, res) => {
         return res.status(500).json({ error: err.message });
       }
       res.json({ success: true });
+    });
+  });
+});
+
+// Update project overrides
+app.patch('/api/projects/:id', (req, res) => {
+  const { id } = req.params;
+  const allowed = ['override_build_command', 'override_start_command', 'override_port', 'override_docker_image'];
+  const updates = {};
+  for (const key of allowed) {
+    if (key in req.body) {
+      // null clears the override, otherwise use the value
+      updates[key] = req.body[key] === null ? null : req.body[key];
+    }
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No valid override fields provided' });
+  }
+
+  db.getProject(id, (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    db.updateProject(id, updates, (err) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      db.getProject(id, (err, updated) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(updated);
+      });
     });
   });
 });

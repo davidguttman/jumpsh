@@ -45,6 +45,10 @@ class Database {
         is_worktree BOOLEAN DEFAULT 0,
         branch_name TEXT,
         assigned_port INTEGER,
+        override_build_command TEXT,
+        override_start_command TEXT,
+        override_port INTEGER,
+        override_docker_image TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -52,7 +56,16 @@ class Database {
       // Migration: add assigned_port if table already exists without it
       this.db.run('ALTER TABLE projects ADD COLUMN assigned_port INTEGER', () => {
         // Silently ignore "duplicate column" error
-        done();
+        // Migration: add command override columns
+        this.db.run('ALTER TABLE projects ADD COLUMN override_build_command TEXT', () => {
+          this.db.run('ALTER TABLE projects ADD COLUMN override_start_command TEXT', () => {
+            this.db.run('ALTER TABLE projects ADD COLUMN override_port INTEGER', () => {
+              this.db.run('ALTER TABLE projects ADD COLUMN override_docker_image TEXT', () => {
+                done();
+              });
+            });
+          });
+        });
       });
     });
   }

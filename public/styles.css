@@ -460,6 +460,101 @@ main {
   color: var(--accent-cyan);
 }
 
+/* ---- Settings Section ---- */
+.settings-section {
+  margin: 1rem 0;
+  border-bottom: 2px dashed var(--border-inner);
+  padding-bottom: 1rem;
+}
+
+.settings-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-pixel);
+  font-size: 0.55rem;
+  letter-spacing: 1px;
+  text-transform: lowercase;
+}
+
+.settings-toggle::before {
+  content: '\25B6\00a0';
+}
+
+.settings-toggle:hover {
+  color: var(--accent-cyan);
+}
+
+.settings-panel h3 {
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+  color: var(--accent-gold);
+  margin: 0.8rem 0 0.4rem;
+  letter-spacing: 1px;
+}
+
+.settings-hint {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin-bottom: 0.8rem;
+}
+
+.settings-form .form-group {
+  margin-bottom: 0.8rem;
+}
+
+.settings-form .form-group label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  letter-spacing: 1px;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+}
+
+.settings-form .form-group input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 2px solid var(--border-inner);
+  background: var(--panel-bg);
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.settings-form .form-group input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.settings-form .form-group input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.settings-feedback {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  letter-spacing: 0.5px;
+}
+
+.settings-feedback.success {
+  color: var(--accent-green);
+}
+
+.settings-feedback.error {
+  color: var(--accent-red);
+}
+
 /* ---- Worktrees Table ---- */
 .worktrees-section {
   margin: 2rem 0;
