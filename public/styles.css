@@ -826,7 +826,7 @@ main {
 
 .detection-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.8rem;
 }
 
@@ -843,7 +843,27 @@ main {
 .detection-value {
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  color: var(--accent-cyan);
+  color: var(--text-bright);
+}
+
+.detection-value input {
+  background: var(--panel-bg);
+  border: 2px solid var(--border-inner);
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+  width: 100%;
+}
+
+.detection-value input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.detection-value input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .path-input-row {

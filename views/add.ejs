@@ -51,15 +51,19 @@
             </div>
             <div class="detection-row">
               <span class="detection-label">Build Command</span>
-              <span class="detection-value" id="detect-install">—</span>
+              <span class="detection-value"><input type="text" id="detect-install" name="override_build_command" placeholder="—"></span>
             </div>
             <div class="detection-row">
               <span class="detection-label">Start Command</span>
-              <span class="detection-value" id="detect-dev">—</span>
+              <span class="detection-value"><input type="text" id="detect-dev" name="override_start_command" placeholder="—"></span>
             </div>
             <div class="detection-row">
               <span class="detection-label">Port</span>
-              <span class="detection-value" id="detect-port">—</span>
+              <span class="detection-value"><input type="text" id="detect-port" name="override_port" placeholder="—"></span>
+            </div>
+            <div class="detection-row">
+              <span class="detection-label">Docker Image</span>
+              <span class="detection-value"><input type="text" id="detect-docker-image" name="override_docker_image" placeholder="—"></span>
             </div>
           </div>
         </div>
@@ -75,6 +79,7 @@
         var nameInput = document.getElementById('name');
         var subdomainPreview = document.getElementById('subdomain-preview');
         var lastDetectedPath = '';
+        var detectedDefaults = {};
 
         function folderToName(p) {
           return p.replace(/\/+$/, '').split('/').pop() || '';
@@ -108,9 +113,16 @@
               }
               document.getElementById('detect-type').textContent = data.type || '—';
               document.getElementById('detect-framework').textContent = data.framework || '—';
-              document.getElementById('detect-install').textContent = data.installCommand || '—';
-              document.getElementById('detect-dev').textContent = data.devCommand || '—';
-              document.getElementById('detect-port').textContent = data.port || '—';
+              detectedDefaults = {
+                install: data.installCommand || '',
+                dev: data.devCommand || '',
+                port: data.port ? String(data.port) : '',
+                dockerImage: data.dockerImage || ''
+              };
+              document.getElementById('detect-install').value = detectedDefaults.install;
+              document.getElementById('detect-dev').value = detectedDefaults.dev;
+              document.getElementById('detect-port').value = detectedDefaults.port;
+              document.getElementById('detect-docker-image').value = detectedDefaults.dockerImage;
               results.style.display = '';
             })
             .catch(function (err) {
@@ -132,6 +144,18 @@
         nameInput.addEventListener('input', function() {
           nameInput.dataset.userEdited = this.value ? 'true' : '';
           subdomainPreview.textContent = this.value || 'my-app';
+        });
+
+        // On submit, clear override fields that match detected defaults (no override needed)
+        document.querySelector('form').addEventListener('submit', function() {
+          var installInput = document.getElementById('detect-install');
+          var devInput = document.getElementById('detect-dev');
+          var portInput = document.getElementById('detect-port');
+          var dockerImageInput = document.getElementById('detect-docker-image');
+          if (installInput.value === detectedDefaults.install) installInput.value = '';
+          if (devInput.value === detectedDefaults.dev) devInput.value = '';
+          if (portInput.value === detectedDefaults.port) portInput.value = '';
+          if (dockerImageInput.value === detectedDefaults.dockerImage) dockerImageInput.value = '';
         });
       </script>
     </div>

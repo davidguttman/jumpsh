@@ -164,13 +164,19 @@ app.get('/add', (req, res) => {
 
 // Create project
 app.post('/projects', (req, res) => {
-  const { name, path: projectPath, description } = req.body;
-  
+  const { name, path: projectPath, description, override_build_command, override_start_command, override_port, override_docker_image } = req.body;
+
   if (!name || !projectPath) {
     return res.status(400).send('Name and path are required');
   }
 
-  db.createProject({ name, path: projectPath, description }, (err, id) => {
+  db.createProject({
+    name, path: projectPath, description,
+    override_build_command: override_build_command || null,
+    override_start_command: override_start_command || null,
+    override_port: override_port ? parseInt(override_port, 10) : null,
+    override_docker_image: override_docker_image || null,
+  }, (err, id) => {
     if (err) {
       return res.status(500).send(`Error creating project: ${err.message}`);
     }

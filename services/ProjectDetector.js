@@ -33,7 +33,7 @@ export function detectProjectType(projectPath) {
     return detectPython(projectPath, 'pyproject.toml');
   }
   if (fs.existsSync(path.join(projectPath, 'go.mod'))) {
-    return { type: 'go', framework: null, devCommand: 'go run .', port: 8080 };
+    return { type: 'go', framework: null, devCommand: 'go run .', port: 8080, dockerImage: 'golang:1.22-alpine' };
   }
 
   return { error: 'Could not detect project type. Add a docker-compose.yml manually.' };
@@ -94,48 +94,54 @@ function detectPortFromScript(scriptContent) {
   return 3000;
 }
 
+function nodeDockerImage(pm) {
+  return pm.name === 'bun' ? 'oven/bun:latest' : 'node:20-slim';
+}
+
 function detectNode(projectPath) {
   let pkg;
   try {
     pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
   } catch {
-    return { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: detectPackageManager(projectPath) };
+    const pm = detectPackageManager(projectPath);
+    return { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: pm, dockerImage: nodeDockerImage(pm) };
   }
 
   const pm = detectPackageManager(projectPath);
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
   const scripts = pkg.scripts || {};
+  const image = nodeDockerImage(pm);
 
   // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
   if (scripts.dev && !scripts.dev.includes('vite')) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Framework detection
   if (deps.vite || (scripts.dev && scripts.dev.includes('vite'))) {
-    return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev`, port: 5173, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev`, port: 5173, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
   if (deps.next) {
-    return { type: 'node', framework: 'next', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: 'next', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
   if (deps.nuxt) {
-    return { type: 'node', framework: 'nuxt', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: 'nuxt', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Has a dev script
   if (scripts.dev) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Has a start script
   if (scripts.start) {
     const startCmd = pm.name === 'yarn' ? 'yarn start' : `${pm.run} start`;
-    return { type: 'node', framework: null, devCommand: startCmd, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install };
+    return { type: 'node', framework: null, devCommand: startCmd, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Fallback: find entrypoint
   const entrypoint = findNodeEntrypoint(projectPath, pkg);
-  return { type: 'node', framework: null, devCommand: `node ${entrypoint}`, port: 3000, packageManager: pm, installCommand: pm.install };
+  return { type: 'node', framework: null, devCommand: `node ${entrypoint}`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
 }
 
 function findNodeEntrypoint(projectPath, pkg) {
@@ -161,27 +167,29 @@ function detectPython(projectPath, markerFile) {
     content = fs.readFileSync(path.join(projectPath, markerFile), 'utf8').toLowerCase();
   } catch { /* empty */ }
 
+  const pyImage = 'python:3.12-slim';
+
   // Django: manage.py is definitive
   if (fs.existsSync(path.join(projectPath, 'manage.py'))) {
-    return { type, framework: 'django', devCommand: 'python manage.py runserver 0.0.0.0:8000', port: 8000, installCommand: buildPythonInstall(markerFile) };
+    return { type, framework: 'django', devCommand: 'python manage.py runserver 0.0.0.0:8000', port: 8000, installCommand: buildPythonInstall(markerFile), dockerImage: pyImage };
   }
 
   // FastAPI / Uvicorn
   if (content.includes('fastapi') || content.includes('uvicorn')) {
     const entrypoint = findPythonEntrypoint(projectPath, 'FastAPI');
-    return { type, framework: 'fastapi', devCommand: `uvicorn ${entrypoint} --reload --host 0.0.0.0`, port: 8000, installCommand: buildPythonInstall(markerFile) };
+    return { type, framework: 'fastapi', devCommand: `uvicorn ${entrypoint} --reload --host 0.0.0.0`, port: 8000, installCommand: buildPythonInstall(markerFile), dockerImage: pyImage };
   }
 
   // Flask
   if (content.includes('flask')) {
     const module = findFlaskModule(projectPath);
-    return { type, framework: 'flask', devCommand: `flask --app ${module} run --reload --host 0.0.0.0`, port: 5000, installCommand: buildPythonInstall(markerFile) };
+    return { type, framework: 'flask', devCommand: `flask --app ${module} run --reload --host 0.0.0.0`, port: 5000, installCommand: buildPythonInstall(markerFile), dockerImage: pyImage };
   }
 
   // Generic Python — try to find an entrypoint
   const pyEntry = findGenericPythonEntrypoint(projectPath);
   if (pyEntry) {
-    return { type, framework: null, devCommand: `python ${pyEntry}`, port: 8000, installCommand: buildPythonInstall(markerFile) };
+    return { type, framework: null, devCommand: `python ${pyEntry}`, port: 8000, installCommand: buildPythonInstall(markerFile), dockerImage: pyImage };
   }
 
   return {
@@ -190,6 +198,7 @@ function detectPython(projectPath, markerFile) {
     devCommand: 'python app.py',
     port: 8000,
     installCommand: buildPythonInstall(markerFile),
+    dockerImage: pyImage,
     needsManualConfig: true,
     message: 'Could not detect Python entrypoint. Set start command manually.'
   };

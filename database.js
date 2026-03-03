@@ -135,11 +135,11 @@ class Database {
 
   // Project CRUD
   createProject(project, callback) {
-    const { name, path, subdomain, description, parent_project_id, is_worktree, branch_name } = project;
+    const { name, path, subdomain, description, parent_project_id, is_worktree, branch_name, override_build_command, override_start_command, override_port, override_docker_image } = project;
     this.db.run(
-      `INSERT INTO projects (name, path, subdomain, description, parent_project_id, is_worktree, branch_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, path, subdomain || name.toLowerCase().replace(/[^a-z0-9]/g, '-'), description, parent_project_id, is_worktree ? 1 : 0, branch_name],
+      `INSERT INTO projects (name, path, subdomain, description, parent_project_id, is_worktree, branch_name, override_build_command, override_start_command, override_port, override_docker_image)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, path, subdomain || name.toLowerCase().replace(/[^a-z0-9]/g, '-'), description, parent_project_id, is_worktree ? 1 : 0, branch_name, override_build_command || null, override_start_command || null, override_port || null, override_docker_image || null],
       function(err) {
         callback(err, this?.lastID);
       }
