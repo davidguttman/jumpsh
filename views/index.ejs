@@ -64,7 +64,6 @@
                   <% for (const wt of worktrees) { %>
                     <% const wtHealth = wt.health || 'unknown'; %>
                     <li class="<%= wt.status %>">
-                      <span class="status-dot <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"></span>
                       <% if (wtHealth === 'healthy') { %>
                         <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-branch-link"><%= wt.branch_name %></a>
                       <% } else { %>
