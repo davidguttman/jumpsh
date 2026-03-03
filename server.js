@@ -158,7 +158,7 @@ app.get('/', async (req, res) => {
 
 // Add project form
 app.get('/add', (req, res) => {
-  res.render('add', { config: req.requestConfig });
+  res.render('add', { config: req.requestConfig, homeDir: os.homedir() });
 });
 
 // Create project

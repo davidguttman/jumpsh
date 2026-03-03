@@ -18,8 +18,12 @@
       <form action="/projects" method="POST">
         <input type="hidden" id="path" name="path" required>
 
-        <div class="browse-row">
-          <button type="button" class="btn btn-browse-full" id="browse-btn">&gt; SELECT PROJECT DIRECTORY</button>
+        <div id="browser-section">
+          <div class="folder-path-bar" id="path-bar">/</div>
+          <div class="column-browser" id="column-browser"></div>
+          <div class="folder-modal-footer">
+            <button type="button" class="btn" id="modal-select">select this folder</button>
+          </div>
         </div>
 
         <div id="fields-section" style="display: none;">
@@ -150,56 +154,26 @@
     </div>
   </main>
 
-  <!-- Folder Browser Modal -->
-  <div class="folder-modal-overlay" id="folder-modal">
-    <div class="folder-modal">
-      <div class="folder-modal-header">
-        <h3>Select Project Folder</h3>
-        <button class="folder-modal-close" id="modal-close">&times;</button>
-      </div>
-      <div class="folder-path-bar" id="path-bar">/</div>
-      <div class="column-browser" id="column-browser"></div>
-      <div class="folder-modal-footer">
-        <button type="button" class="btn" id="modal-cancel">cancel</button>
-        <button type="button" class="btn" id="modal-select">select this folder</button>
-      </div>
-    </div>
-  </div>
-
   <script>
   (function () {
     var columns = []
-    var overlay = document.getElementById('folder-modal')
     var browser = document.getElementById('column-browser')
     var pathBar = document.getElementById('path-bar')
     var pathInput = document.getElementById('path')
-
-    document.getElementById('browse-btn').addEventListener('click', function () {
-      var startPath = pathInput.value || '/'
-      columns = []
-      openModal(startPath)
-    })
-
-    document.getElementById('modal-close').addEventListener('click', closeModal)
-    document.getElementById('modal-cancel').addEventListener('click', closeModal)
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closeModal()
-    })
+    var browserSection = document.getElementById('browser-section')
+    var homeDir = '<%= homeDir %>'
 
     document.getElementById('modal-select').addEventListener('click', function () {
       pathInput.value = getSelectedPath()
       pathInput.dispatchEvent(new Event('change'))
-      closeModal()
+      browserSection.style.display = 'none'
     })
 
-    function openModal(startPath) {
-      overlay.classList.add('open')
-      // Split path into segments and load each column
+    // Auto-load home directory on page load
+    function initBrowser(startPath) {
       var parts = startPath.split('/').filter(Boolean)
-      var currentPath = '/'
       columns = []
-      loadColumn(currentPath, 0).then(function () {
-        // Walk down the path selecting each segment
+      loadColumn('/', 0).then(function () {
         return parts.reduce(function (chain, part, i) {
           return chain.then(function () {
             var col = columns[i]
@@ -208,11 +182,10 @@
             if (idx === -1) return
             col.selected = idx
             renderColumns()
-            return loadColumn(currentPath + (currentPath === '/' ? '' : '/') + parts.slice(0, i + 1).join('/'), i + 1)
+            return loadColumn('/' + parts.slice(0, i + 1).join('/'), i + 1)
           })
         }, Promise.resolve())
       }).then(function () {
-        // Load one more column for the deepest selected folder
         var deepPath = getSelectedPath()
         if (deepPath !== '/' && columns.length > 0) {
           var lastCol = columns[columns.length - 1]
@@ -222,9 +195,7 @@
       })
     }
 
-    function closeModal() {
-      overlay.classList.remove('open')
-    }
+    initBrowser(homeDir)
 
     function getSelectedPath() {
       var parts = ['/']
