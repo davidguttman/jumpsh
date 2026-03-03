@@ -41,9 +41,9 @@
                 <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
               <% } %>
               <% if (project.status === 'running') { %>
-                <button class="btn btn-danger btn-sm" onclick="stopProject(<%= project.id %>)" >Stop</button>
+                <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)" >Stop</button>
               <% } else { %>
-                <button class="btn btn-success btn-sm" onclick="startProject(<%= project.id %>)" >Start</button>
+                <button class="btn btn-success" onclick="startProject(<%= project.id %>)" >Start</button>
               <% } %>
             </div>
 
