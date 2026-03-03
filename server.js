@@ -440,9 +440,9 @@ app.patch('/api/projects/:id', (req, res) => {
     return res.status(400).json({ error: 'No valid override fields provided' });
   }
 
-  // Docker requires lowercase image names
-  if (updates.override_docker_image) {
-    updates.override_docker_image = updates.override_docker_image.toLowerCase();
+  // Force all settings lowercase (UI uses all-caps font)
+  for (const key of Object.keys(updates)) {
+    if (typeof updates[key] === 'string') updates[key] = updates[key].toLowerCase();
   }
 
   db.getProject(id, (err, project) => {
