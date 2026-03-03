@@ -46,6 +46,7 @@
 body {
   font-family: var(--font-mono);
   background: var(--bg);
+  color: var(--text);
   
   line-height: 1.6;
   min-height: 100vh;
@@ -102,7 +103,7 @@ header nav a,
 header .header-actions a {
   font-family: var(--font-pixel);
   font-size: 0.65rem;
-  
+  color: var(--text);
   text-transform: lowercase;
   letter-spacing: 1px;
 }
@@ -179,7 +180,7 @@ main {
   border: 24px solid;
   border-image: url('/assets/borders/plain.gif') 32 round;
   border-radius: 36px;
-  
+  color: var(--text);
   padding: 0.5rem 0.75rem;
   margin-bottom: 1.2rem;
 }
@@ -288,7 +289,7 @@ main {
   margin-left: auto;
   font-family: var(--font-pixel);
   font-size: 0.55rem;
-  
+  color: var(--text);
   letter-spacing: 1px;
 }
 
