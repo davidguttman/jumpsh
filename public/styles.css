@@ -115,8 +115,7 @@ header .header-actions a:hover {
 
 header nav a::before,
 header .header-actions a::before {
-  content: '\25B6\00a0';
-  font-size: 0.55rem;
+  content: '';
 }
 
 /* ---- Main ---- */

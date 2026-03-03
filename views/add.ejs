@@ -17,12 +17,6 @@
       
       <form action="/projects" method="POST">
         <div class="form-group">
-          <label for="name">Project Name</label>
-          <input type="text" id="name" name="name" required placeholder="my-app">
-          <small>Will be used for subdomain: my-app.<%= config.domain %></small>
-        </div>
-
-        <div class="form-group">
           <label for="path">Project Folder</label>
           <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app" list="folder-options">
           <datalist id="folder-options">
@@ -34,8 +28,9 @@
         </div>
 
         <div class="form-group">
-          <label for="description">Description (optional)</label>
-          <textarea id="description" name="description" rows="3" placeholder="What does this project do?"></textarea>
+          <label for="name">Project Name</label>
+          <input type="text" id="name" name="name" required placeholder="my-app">
+          <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
         </div>
 
         <div class="form-actions">
@@ -43,6 +38,29 @@
           <button type="submit" class="btn btn-primary">Add Project</button>
         </div>
       </form>
+
+      <script>
+        const pathInput = document.getElementById('path');
+        const nameInput = document.getElementById('name');
+        const subdomainPreview = document.getElementById('subdomain-preview');
+
+        function folderToName(path) {
+          return path.replace(/\/+$/, '').split('/').pop() || '';
+        }
+
+        pathInput.addEventListener('change', function() {
+          const name = folderToName(this.value);
+          if (name && !nameInput.dataset.userEdited) {
+            nameInput.value = name;
+            subdomainPreview.textContent = name;
+          }
+        });
+
+        nameInput.addEventListener('input', function() {
+          nameInput.dataset.userEdited = this.value ? 'true' : '';
+          subdomainPreview.textContent = this.value || 'my-app';
+        });
+      </script>
     </div>
   </main>
 </body>

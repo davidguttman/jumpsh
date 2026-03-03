@@ -130,11 +130,13 @@ app.post('/projects', (req, res) => {
     if (err) {
       return res.status(500).send(`Error creating project: ${err.message}`);
     }
-    
-    // Start watching for worktrees
-    db.getProject(id, (err, project) => {
+
+    db.getProject(id, async (err, project) => {
       if (!err && project) {
+        // Start watching for worktrees
         worktreeScanner.watchProject(project);
+        // Auto-start the project
+        await docker.start(project);
       }
     });
 
