@@ -388,8 +388,10 @@ main {
 }
 
 .add-browser-wide #browser-section {
-  border: 2px solid var(--border-inner);
-  border-radius: 8px;
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   overflow: hidden;
 }
 
@@ -422,7 +424,9 @@ main {
 .form-group textarea {
   width: 100%;
   padding: 0.6rem;
-  border: 2px solid var(--border-inner);
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
   background: var(--panel-bg);
   color: var(--text-bright);
   font-family: var(--font-mono);
@@ -534,7 +538,9 @@ main {
 .settings-form .form-group input {
   width: 100%;
   padding: 0.4rem 0.6rem;
-  border: 2px solid var(--border-inner);
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
   background: var(--panel-bg);
   color: var(--text-bright);
   font-family: var(--font-mono);
@@ -865,7 +871,9 @@ main {
 
 .detection-value input {
   background: var(--panel-bg);
-  border: 2px solid var(--border-inner);
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
   color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -896,7 +904,9 @@ main {
 .path-display {
   flex: 1;
   padding: 0.6rem;
-  border: 2px solid var(--border-inner);
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
   background: var(--bg-color);
   color: var(--text-muted);
   font-family: var(--font-mono);
