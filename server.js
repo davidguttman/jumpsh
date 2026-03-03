@@ -70,7 +70,7 @@ app.use(subdomainProxy.middleware());
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -459,8 +459,9 @@ try {
     }
     console.warn(`Falling back to available port ${nextPort}.`);
     config.port = nextPort;
+  } else {
+    throw err;
   }
-  throw err;
 }
 
 // Rotate logs on startup
