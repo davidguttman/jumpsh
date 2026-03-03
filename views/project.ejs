@@ -75,7 +75,7 @@
               <label for="override_docker_image">Docker Image</label>
               <input type="text" id="override_docker_image"
                 value="<%= project.override_docker_image || '' %>"
-                placeholder="auto">
+                placeholder="<%= detection.dockerImage || 'auto-detect' %>">
             </div>
             <div class="settings-actions">
               <button class="btn" id="save-settings-btn" onclick="saveSettings()">Save</button>

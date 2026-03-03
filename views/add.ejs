@@ -16,57 +16,51 @@
       <h2>Add Project</h2>
 
       <form action="/projects" method="POST">
-        <div class="form-group">
-          <label for="path">Project Folder</label>
-          <input type="hidden" id="path" name="path" required>
-          <div class="path-input-row">
-            <div class="path-display" id="path-display">No folder selected</div>
-            <button type="button" class="btn btn-browse" id="browse-btn">browse</button>
-          </div>
-          <small>Select a project folder using the browser. docker-compose is optional; jump.sh will generate one when possible.</small>
+        <input type="hidden" id="path" name="path" required>
+
+        <div class="browse-row">
+          <button type="button" class="btn btn-browse-full" id="browse-btn">&gt; SELECT PROJECT DIRECTORY</button>
         </div>
 
-        <div class="form-group">
-          <label for="name">Project Name</label>
-          <input type="text" id="name" name="name" required placeholder="my-app">
-          <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
-        </div>
-
-        <div id="detection-preview" class="detection-preview" style="display: none;">
-          <h3 class="detection-title">Detection Preview</h3>
+        <div id="fields-section" style="display: none;">
           <div id="detection-loading" class="detection-loading" style="display: none;">detecting...</div>
           <div id="detection-error" class="detection-error" style="display: none;"></div>
-          <div id="detection-results" class="detection-results" style="display: none;">
-            <div class="detection-row">
-              <span class="detection-label">Type</span>
-              <span class="detection-value" id="detect-type">—</span>
-            </div>
-            <div class="detection-row">
-              <span class="detection-label">Framework</span>
-              <span class="detection-value" id="detect-framework">—</span>
-            </div>
-            <div class="detection-row">
-              <span class="detection-label">Build Command</span>
-              <span class="detection-value"><input type="text" id="detect-install" name="override_build_command" placeholder="—"></span>
-            </div>
-            <div class="detection-row">
-              <span class="detection-label">Start Command</span>
-              <span class="detection-value"><input type="text" id="detect-dev" name="override_start_command" placeholder="—"></span>
-            </div>
-            <div class="detection-row">
-              <span class="detection-label">Port</span>
-              <span class="detection-value"><input type="text" id="detect-port" name="override_port" placeholder="—"></span>
-            </div>
-            <div class="detection-row">
-              <span class="detection-label">Docker Image</span>
-              <span class="detection-value"><input type="text" id="detect-docker-image" name="override_docker_image" placeholder="—"></span>
-            </div>
-          </div>
-        </div>
 
-        <div class="form-actions">
-          <a href="/" class="btn">Cancel</a>
-          <button type="submit" class="btn btn-primary">Add Project</button>
+          <div class="form-group">
+            <label>Project Directory</label>
+            <div class="path-display has-path" id="path-display"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="name">Project Name</label>
+            <input type="text" id="name" name="name" required placeholder="my-app">
+            <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
+          </div>
+
+          <div class="form-group">
+            <label for="detect-install">Build Command</label>
+            <input type="text" id="detect-install" name="override_build_command" placeholder="—">
+          </div>
+
+          <div class="form-group">
+            <label for="detect-dev">Start Command</label>
+            <input type="text" id="detect-dev" name="override_start_command" placeholder="—">
+          </div>
+
+          <div class="form-group">
+            <label for="detect-port">Port</label>
+            <input type="text" id="detect-port" name="override_port" placeholder="—">
+          </div>
+
+          <div class="form-group">
+            <label for="detect-docker-image">Docker Image</label>
+            <input type="text" id="detect-docker-image" name="override_docker_image" placeholder="—">
+          </div>
+
+          <div class="form-actions">
+            <a href="/" class="btn">Cancel</a>
+            <button type="submit" class="btn btn-primary">Add Project</button>
+          </div>
         </div>
       </form>
 
@@ -74,6 +68,8 @@
         var pathInput = document.getElementById('path');
         var nameInput = document.getElementById('name');
         var subdomainPreview = document.getElementById('subdomain-preview');
+        var fieldsSection = document.getElementById('fields-section');
+        var pathDisplay = document.getElementById('path-display');
         var lastDetectedPath = '';
         var detectedDefaults = {};
 
@@ -85,15 +81,11 @@
           if (!projectPath || projectPath === lastDetectedPath) return;
           lastDetectedPath = projectPath;
 
-          var preview = document.getElementById('detection-preview');
           var loading = document.getElementById('detection-loading');
           var error = document.getElementById('detection-error');
-          var results = document.getElementById('detection-results');
 
-          preview.style.display = '';
           loading.style.display = '';
           error.style.display = 'none';
-          results.style.display = 'none';
 
           fetch('/api/detect?path=' + encodeURIComponent(projectPath))
             .then(function (res) {
@@ -107,8 +99,6 @@
                 error.style.display = '';
                 return;
               }
-              document.getElementById('detect-type').textContent = data.type || '—';
-              document.getElementById('detect-framework').textContent = data.framework || '—';
               detectedDefaults = {
                 install: data.installCommand || '',
                 dev: data.devCommand || '',
@@ -119,7 +109,6 @@
               document.getElementById('detect-dev').value = detectedDefaults.dev;
               document.getElementById('detect-port').value = detectedDefaults.port;
               document.getElementById('detect-docker-image').value = detectedDefaults.dockerImage;
-              results.style.display = '';
             })
             .catch(function (err) {
               loading.style.display = 'none';
@@ -128,12 +117,12 @@
             });
         }
 
-        var pathDisplay = document.getElementById('path-display');
-
         pathInput.addEventListener('change', function() {
           var name = folderToName(this.value);
-          pathDisplay.textContent = this.value || 'No folder selected';
-          pathDisplay.classList.toggle('has-path', !!this.value);
+          if (this.value) {
+            pathDisplay.textContent = this.value;
+            fieldsSection.style.display = '';
+          }
           if (name && !nameInput.dataset.userEdited) {
             nameInput.value = name;
             subdomainPreview.textContent = name.replace(/\./g, '-');

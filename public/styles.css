@@ -899,6 +899,31 @@ main {
   white-space: nowrap;
 }
 
+.browse-row {
+  margin-bottom: 1.5rem;
+}
+
+.btn-browse-full {
+  display: block;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  border: 2px solid var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.btn-browse-full::before {
+  content: '';
+  margin-right: 0;
+}
+
+.btn-browse-full:hover {
+  background: rgba(216, 200, 48, 0.1);
+  color: var(--accent-gold);
+}
+
 @media (max-width: 600px) {
   .folder-modal {
     max-width: 100vw;
