@@ -105,6 +105,7 @@
 
     document.getElementById('modal-select').addEventListener('click', function () {
       pathInput.value = getSelectedPath()
+      pathInput.dispatchEvent(new Event('change'))
       closeModal()
     })
 
