@@ -248,6 +248,8 @@ main {
 
 .project-url .btn {
   margin-left: auto;
+  min-width: 4.5rem;
+  text-align: right;
 }
 
 .project-url a {
@@ -267,9 +269,11 @@ main {
 
 .detail-link {
   font-family: var(--font-pixel);
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   color: var(--text);
   letter-spacing: 1px;
+  min-width: 4.5rem;
+  text-align: right;
 }
 
 .detail-link::before {
