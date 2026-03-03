@@ -22,7 +22,7 @@ export function detectProjectType(projectPath) {
     return { error: `Invalid project path: ${e.message}` };
   }
 
-  // Detection priority: package.json > requirements.txt > pyproject.toml > go.mod
+  // Detection priority: package.json > requirements.txt > pyproject.toml > Gemfile > go.mod
   if (fs.existsSync(path.join(projectPath, 'package.json'))) {
     return detectNode(projectPath);
   }
@@ -31,6 +31,9 @@ export function detectProjectType(projectPath) {
   }
   if (fs.existsSync(path.join(projectPath, 'pyproject.toml'))) {
     return detectPython(projectPath, 'pyproject.toml');
+  }
+  if (fs.existsSync(path.join(projectPath, 'Gemfile'))) {
+    return detectRuby(projectPath);
   }
   if (fs.existsSync(path.join(projectPath, 'go.mod'))) {
     return { type: 'go', framework: null, devCommand: 'go run .', port: 8080, dockerImage: 'golang:1.22-alpine' };
@@ -267,6 +270,19 @@ function findGenericPythonEntrypoint(projectPath) {
     if (fs.existsSync(path.join(projectPath, file))) return file;
   }
   return null;
+}
+
+// ---- Ruby detection ----
+
+function detectRuby(projectPath) {
+  const rubyImage = 'ruby:3.2-slim';
+
+  // Rails: Gemfile + config.ru
+  if (fs.existsSync(path.join(projectPath, 'config.ru'))) {
+    return { type: 'ruby', framework: 'rails', devCommand: 'bundle exec rails server -b 0.0.0.0', port: 3000, installCommand: 'bundle install', dockerImage: rubyImage };
+  }
+
+  return { type: 'ruby', framework: null, devCommand: 'bundle exec ruby app.rb', port: 4567, installCommand: 'bundle install', dockerImage: rubyImage };
 }
 
 // ---- Static site detection ----
