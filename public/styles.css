@@ -407,7 +407,7 @@ main {
   padding: 0.6rem;
   border: 2px solid var(--border-inner);
   background: var(--panel-bg);
-  color: var(--accent-cyan);
+  color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.9rem;
 }
@@ -519,7 +519,7 @@ main {
   padding: 0.4rem 0.6rem;
   border: 2px solid var(--border-inner);
   background: var(--panel-bg);
-  color: var(--accent-cyan);
+  color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
@@ -706,7 +706,7 @@ main {
   border-bottom: 1px solid var(--border-inner);
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  color: var(--accent-cyan);
+  color: var(--text-bright);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -874,6 +874,23 @@ main {
 
 .path-input-row input {
   flex: 1;
+}
+
+.path-display {
+  flex: 1;
+  padding: 0.6rem;
+  border: 2px solid var(--border-inner);
+  background: var(--bg-color);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.path-display.has-path {
+  color: var(--text-bright);
 }
 
 .btn-browse {

@@ -158,8 +158,7 @@ app.get('/', async (req, res) => {
 
 // Add project form
 app.get('/add', (req, res) => {
-  const folderOptions = listProjectFolders();
-  res.render('add', { config: req.requestConfig, folderOptions });
+  res.render('add', { config: req.requestConfig });
 });
 
 // Create project
@@ -552,25 +551,6 @@ async function findNextAvailablePort(startPort, maxDelta = 25) {
     } catch {}
   }
   return null;
-}
-
-function listProjectFolders() {
-  const roots = [
-    path.join(os.homedir(), 'play', 'web'),
-    path.join(os.homedir(), 'play', 'js'),
-    path.join(os.homedir(), 'play', 'native'),
-  ];
-  const out = [];
-  for (const root of roots) {
-    try {
-      const entries = fs.readdirSync(root, { withFileTypes: true })
-        .filter(d => d.isDirectory() && !d.name.startsWith('.') && !d.name.startsWith('_'))
-        .slice(0, 400)
-        .map(d => path.join(root, d.name));
-      out.push(...entries);
-    } catch {}
-  }
-  return out.slice(0, 800);
 }
 
 

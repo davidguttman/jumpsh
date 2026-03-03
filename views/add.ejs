@@ -18,16 +18,12 @@
       <form action="/projects" method="POST">
         <div class="form-group">
           <label for="path">Project Folder</label>
+          <input type="hidden" id="path" name="path" required>
           <div class="path-input-row">
-            <input type="text" id="path" name="path" required placeholder="/home/user/projects/my-app" list="folder-options">
+            <div class="path-display" id="path-display">No folder selected</div>
             <button type="button" class="btn btn-browse" id="browse-btn">browse</button>
           </div>
-          <datalist id="folder-options">
-            <% (folderOptions || []).forEach(function(folder) { %>
-              <option value="<%= folder %>"></option>
-            <% }) %>
-          </datalist>
-          <small>Absolute path to project folder. docker-compose is optional; jump.sh will generate one when possible.</small>
+          <small>Select a project folder using the browser. docker-compose is optional; jump.sh will generate one when possible.</small>
         </div>
 
         <div class="form-group">
@@ -132,18 +128,22 @@
             });
         }
 
+        var pathDisplay = document.getElementById('path-display');
+
         pathInput.addEventListener('change', function() {
           var name = folderToName(this.value);
+          pathDisplay.textContent = this.value || 'No folder selected';
+          pathDisplay.classList.toggle('has-path', !!this.value);
           if (name && !nameInput.dataset.userEdited) {
             nameInput.value = name;
-            subdomainPreview.textContent = name;
+            subdomainPreview.textContent = name.replace(/\./g, '-');
           }
           runDetection(this.value);
         });
 
         nameInput.addEventListener('input', function() {
           nameInput.dataset.userEdited = this.value ? 'true' : '';
-          subdomainPreview.textContent = this.value || 'my-app';
+          subdomainPreview.textContent = (this.value || 'my-app').replace(/\./g, '-');
         });
 
         // On submit, clear override fields that match detected defaults (no override needed)
