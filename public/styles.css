@@ -230,9 +230,15 @@ main {
 
 /* ---- Project URL ---- */
 .project-url {
+  display: flex;
+  align-items: center;
   margin-bottom: 0.6rem;
   font-family: var(--font-mono);
   font-size: 0.8rem;
+}
+
+.project-url .btn {
+  margin-left: auto;
 }
 
 .project-url a {
