@@ -13,6 +13,7 @@ import Database from './database.js';
 import DockerManager from './services/DockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
+import { detectProjectType } from './services/ProjectDetector.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { RemoteSyncer } from './lib/remote/syncer.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
@@ -162,6 +163,7 @@ app.get('/projects/:id', (req, res) => {
     const port = status.running ? await docker.getPort(project) : null;
     const health = docker.getHealthWithProbe(project, status);
     const logs = await docker.getLogs(project, 200);
+    const detection = detectProjectType(project.path);
 
     db.getWorktreesForProject(id, async (err, worktrees) => {
       // Get status for worktrees too
@@ -178,6 +180,7 @@ app.get('/projects/:id', (req, res) => {
         project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
         worktrees: worktreesWithStatus,
         logs,
+        detection,
         config
       });
     });
