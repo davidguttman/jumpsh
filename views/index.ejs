@@ -64,15 +64,17 @@
                   <% for (const wt of worktrees) { %>
                     <% const wtHealth = wt.health || 'unknown'; %>
                     <li class="<%= wt.status %>">
-                      <span class="branch-name"><%= wt.branch_name %></span>
-                      <% if (wtHealth === 'healthy') { %>
-                        <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-url">
-                          <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
-                        </a>
-                      <% } else { %>
-                        <span class="wt-url inactive"><%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
-                      <% } %>
                       <span class="status-dot <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"></span>
+                      <% if (wtHealth === 'healthy') { %>
+                        <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-branch-link"><%= wt.branch_name %></a>
+                      <% } else { %>
+                        <span class="wt-branch-name"><%= wt.branch_name %></span>
+                      <% } %>
+                      <% if (wt.status === 'running') { %>
+                        <button class="btn btn-danger btn-sm" onclick="stopProject(<%= wt.id %>)">Stop</button>
+                      <% } else { %>
+                        <button class="btn btn-success btn-sm" onclick="startProject(<%= wt.id %>)">Start</button>
+                      <% } %>
                     </li>
                   <% } %>
                 </ul>
