@@ -492,6 +492,10 @@ main {
 .form-container {
   max-width: 600px;
   margin: 0 auto;
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
   padding: 2rem;
 }
 
