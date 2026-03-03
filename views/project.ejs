@@ -7,25 +7,20 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header>
-    <h1><a href="/">jump.sh</a></h1>
-    <nav>
-      <a href="/add">+ add project</a>
-    </nav>
-  </header>
+  <%- include('partials/_header') %>
 
   <main>
-    <div class="project-detail">
+    <div class="panel project-detail">
       <div class="project-header">
         <h2><%= project.name %></h2>
         <% const health = project.health || 'unknown'; %>
-        <span class="status-badge <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" id="status-badge"><%=
+        <span class="status-indicator <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" id="status-indicator"><%=
           health === 'starting' ? 'STARTING...' :
           health === 'healthy' ? 'RUNNING' :
           health === 'unhealthy' ? 'FAILED' :
           project.status === 'running' ? 'RUNNING' : 'STOPPED'
         %></span>
-        <span class="startup-progress" id="startup-progress" style="display: none;"></span>
+        <span class="startup-progress hidden" id="startup-progress"></span>
       </div>
 
       <div class="project-info">
@@ -48,32 +43,32 @@
       </div>
 
       <div class="settings-section">
-        <button class="settings-toggle" id="settings-toggle" onclick="toggleSettings()">settings</button>
-        <div class="settings-panel" id="settings-panel" style="display: none;">
+        <button class="nav-action settings-toggle" id="settings-toggle" onclick="toggleSettings()">settings</button>
+        <div class="settings-panel hidden" id="settings-panel">
           <h3>Command Overrides</h3>
           <p class="settings-hint">Leave empty to use auto-detected values.</p>
           <div class="settings-form">
             <div class="form-group">
-              <label for="override_build_command">Build Command</label>
-              <input type="text" id="override_build_command"
+              <label class="label" for="override_build_command">Build Command</label>
+              <input class="input" type="text" id="override_build_command"
                 value="<%= project.override_build_command || '' %>"
                 placeholder="<%= detection.installCommand || 'auto-detect' %>">
             </div>
             <div class="form-group">
-              <label for="override_start_command">Start Command</label>
-              <input type="text" id="override_start_command"
+              <label class="label" for="override_start_command">Start Command</label>
+              <input class="input" type="text" id="override_start_command"
                 value="<%= project.override_start_command || '' %>"
                 placeholder="<%= detection.devCommand || 'auto-detect' %>">
             </div>
             <div class="form-group">
-              <label for="override_port">Port</label>
-              <input type="number" id="override_port"
+              <label class="label" for="override_port">Port</label>
+              <input class="input" type="number" id="override_port"
                 value="<%= project.override_port || '' %>"
                 placeholder="<%= detection.port || 'auto-detect' %>">
             </div>
             <div class="form-group">
-              <label for="override_docker_image">Docker Image</label>
-              <input type="text" id="override_docker_image"
+              <label class="label" for="override_docker_image">Docker Image</label>
+              <input class="input" type="text" id="override_docker_image"
                 value="<%= project.override_docker_image || '' %>"
                 placeholder="<%= detection.dockerImage || 'auto-detect' %>">
             </div>
@@ -101,11 +96,11 @@
           <table class="worktrees-table">
             <thead>
               <tr>
-                <th>Branch</th>
-                <th>URL</th>
-                <th>Status</th>
-                <th>Actions</th>
-                <th>Logs</th>
+                <th class="label">Branch</th>
+                <th class="label">URL</th>
+                <th class="label">Status</th>
+                <th class="label">Actions</th>
+                <th class="label">Logs</th>
               </tr>
             </thead>
             <tbody>
@@ -122,24 +117,20 @@
                       <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
                     <% } %>
                   </td>
-                  <td><span class="status-badge <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"><%=
+                  <td><span class="status-indicator <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"><%=
                     wtHealth === 'starting' ? 'STARTING...' :
                     wtHealth === 'healthy' ? 'RUNNING' :
                     wtHealth === 'unhealthy' ? 'FAILED' :
                     wt.status === 'running' ? 'RUNNING' : 'STOPPED'
                   %></span></td>
                   <td>
-                    <% if (wt.status === 'running') { %>
-                      <button class="btn btn-sm btn-danger" onclick="stopProject(<%= wt.id %>)">Stop</button>
-                    <% } else { %>
-                      <button class="btn btn-sm btn-success" onclick="startProject(<%= wt.id %>)">Start</button>
-                    <% } %>
+                    <%- include('partials/_action_btn', { id: wt.id, status: wt.status, btnClass: 'btn-sm' }) %>
                   </td>
                   <td>
                     <button class="btn btn-sm wt-logs-toggle" data-wt-id="<%= wt.id %>">logs</button>
                   </td>
                 </tr>
-                <tr class="wt-logs-row" id="wt-logs-row-<%= wt.id %>" style="display: none;">
+                <tr class="wt-logs-row hidden" id="wt-logs-row-<%= wt.id %>">
                   <td colspan="5" style="padding: 0;">
                     <pre class="wt-logs-output" id="wt-log-output-<%= wt.id %>" style="max-height: 300px; overflow-y: auto; margin: 0; padding: 0.5rem; background: #1a1a1a; color: #ccc; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word;">No logs yet</pre>
                   </td>
@@ -166,13 +157,13 @@
     let eventSource = null;
 
     function subscribeStartup(id) {
-      var badge = document.getElementById('status-badge');
+      var badge = document.getElementById('status-indicator');
       var progress = document.getElementById('startup-progress');
       if (badge) {
-        badge.className = 'status-badge starting';
+        badge.className = 'status-indicator starting';
         badge.textContent = 'STARTING...';
       }
-      if (progress) progress.style.display = '';
+      if (progress) progress.classList.remove('hidden');
 
       var es = new EventSource('/projects/' + id + '/startup');
       es.onmessage = function(e) {
@@ -263,11 +254,11 @@
     function toggleSettings() {
       var panel = document.getElementById('settings-panel');
       var btn = document.getElementById('settings-toggle');
-      if (panel.style.display === 'none') {
-        panel.style.display = '';
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
         btn.textContent = 'hide settings';
       } else {
-        panel.style.display = 'none';
+        panel.classList.add('hidden');
         btn.textContent = 'settings';
       }
     }
@@ -373,7 +364,7 @@
 
         return {
           open: function() {
-            row.style.display = '';
+            row.classList.remove('hidden');
             if (!historyLoaded) {
               historyLoaded = true;
               output.textContent = 'Loading logs...';
@@ -403,10 +394,10 @@
             }
           },
           close: function() {
-            row.style.display = 'none';
+            row.classList.add('hidden');
             stopStream();
           },
-          isOpen: function() { return row.style.display !== 'none'; }
+          isOpen: function() { return !row.classList.contains('hidden'); }
         };
       }
 

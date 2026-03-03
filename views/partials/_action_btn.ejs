@@ -1,0 +1,6 @@
+<% /* Expects: id, status, btnClass (optional extra classes) */ %>
+<% if (typeof status !== 'undefined' && status === 'running') { %>
+  <button class="btn btn-danger<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" onclick="stopProject(<%= id %>)">Stop</button>
+<% } else { %>
+  <button class="btn btn-success<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" onclick="startProject(<%= id %>)">Start</button>
+<% } %>

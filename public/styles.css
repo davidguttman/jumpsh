@@ -126,6 +126,49 @@ main {
   padding: 1.5rem;
 }
 
+/* ---- Utilities ---- */
+.hidden {
+  display: none;
+}
+
+/* ---- Panel (shared surface) ---- */
+.panel {
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
+}
+
+/* ---- Label (shared label/heading style) ---- */
+.label {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  letter-spacing: 1px;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+}
+
+/* ---- Input (shared input style) ---- */
+.input {
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
+  background: var(--panel-bg);
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 /* ---- Buttons ---- */
 .btn {
   display: inline-block;
@@ -151,6 +194,19 @@ main {
   color: var(--accent-cyan);
   text-decoration: none;
 }
+
+.btn-primary {
+  color: var(--accent-gold);
+}
+
+.btn-success {
+  color: var(--accent-green);
+}
+
+.btn-danger {
+  color: var(--accent-red);
+}
+
 .btn-danger-outline {
   background: transparent;
   border-color: var(--accent-red);
@@ -158,7 +214,6 @@ main {
 }
 
 .btn-sm {
-  padding: 0.2rem 0.5rem;
   font-size: 0.5rem;
 }
 
@@ -176,10 +231,6 @@ main {
 
 /* ---- Project Card ---- */
 .project-card {
-  background-color: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
   color: var(--text);
   padding: 0.5rem 0.75rem;
   margin-bottom: 1.2rem;
@@ -267,22 +318,35 @@ main {
   align-items: center;
 }
 
-.detail-link {
+/* Shared base for arrow-prefixed action links/buttons */
+.nav-action {
   font-family: var(--font-pixel);
-  font-size: 0.6rem;
-  color: var(--text);
+  font-size: 0.55rem;
   letter-spacing: 1px;
-  min-width: 4.5rem;
-  text-align: right;
+  text-transform: lowercase;
+  color: var(--text);
+  cursor: pointer;
+  background: none;
+  border: none;
 }
 
-.detail-link::before {
+.nav-action::before {
   content: '\25B6\00a0';
   font-size: 0.5rem;
 }
 
-.detail-link:hover {
+.nav-action:hover {
   color: var(--accent-cyan);
+  text-decoration: none;
+}
+
+.detail-link {
+  font-size: 0.6rem;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.detail-link:hover {
   text-decoration: none;
 }
 
@@ -329,33 +393,57 @@ main {
   text-decoration: underline;
 }
 
-.btn-sm {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.4rem;
+.worktrees li .btn {
   margin-left: auto;
 }
 
-.status-dot {
+/* ---- Status Indicator ---- */
+.status-indicator {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.status-indicator.running {
+  color: var(--accent-green);
+}
+
+.status-indicator.starting {
+  color: var(--accent-gold);
+  animation: pulse 1s infinite;
+}
+
+.status-indicator.unhealthy {
+  color: var(--accent-red);
+}
+
+.status-indicator.stopped {
+  color: var(--text-muted);
+}
+
+.status-indicator--dot {
+  display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 0;
   background: var(--text-muted);
   border: 1px solid #555;
+  font-size: 0;
 }
 
-.status-dot.running {
+.status-indicator--dot.running {
   background: var(--accent-green);
-  
   box-shadow: 0 0 4px var(--accent-green);
 }
 
-.status-dot.starting {
+.status-indicator--dot.starting {
   background: var(--accent-gold);
   border-color: var(--accent-gold);
-  animation: pulse 1s infinite;
 }
 
-.status-dot.unhealthy {
+.status-indicator--dot.unhealthy {
   background: var(--accent-red);
   border-color: var(--accent-red);
 }
@@ -404,10 +492,6 @@ main {
 .form-container {
   max-width: 600px;
   margin: 0 auto;
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
   padding: 2rem;
 }
 
@@ -418,29 +502,14 @@ main {
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  font-family: var(--font-pixel);
   font-size: 0.55rem;
-  letter-spacing: 1px;
-  color: var(--accent-gold);
-  text-transform: uppercase;
 }
 
 .form-group input,
 .form-group textarea {
   width: 100%;
   padding: 0.6rem;
-  background: var(--panel-bg);
-  border: 2px solid var(--border-inner);
-  border-radius: 4px;
-  color: var(--text-bright);
-  font-family: var(--font-mono);
   font-size: 0.9rem;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--accent-gold);
 }
 
 .form-group small {
@@ -459,10 +528,6 @@ main {
 /* ---- Project Detail ---- */
 .project-detail {
   max-width: 900px;
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
   padding: 1.5rem;
 }
 
@@ -493,22 +558,7 @@ main {
 }
 
 .settings-toggle {
-  background: none;
-  border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  font-family: var(--font-pixel);
-  font-size: 0.55rem;
-  letter-spacing: 1px;
-  text-transform: lowercase;
-}
-
-.settings-toggle::before {
-  content: '\25B6\00a0';
-}
-
-.settings-toggle:hover {
-  color: var(--accent-cyan);
 }
 
 .settings-panel h3 {
@@ -530,34 +580,11 @@ main {
 }
 
 .settings-form .form-group label {
-  display: block;
   margin-bottom: 0.3rem;
-  font-family: var(--font-pixel);
-  font-size: 0.5rem;
-  letter-spacing: 1px;
-  color: var(--accent-gold);
-  text-transform: uppercase;
 }
 
 .settings-form .form-group input {
   width: 100%;
-  padding: 0.4rem 0.6rem;
-  background: var(--panel-bg);
-  border: 2px solid var(--border-inner);
-  border-radius: 4px;
-  color: var(--text-bright);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-}
-
-.settings-form .form-group input:focus {
-  outline: none;
-  border-color: var(--accent-gold);
-}
-
-.settings-form .form-group input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.6;
 }
 
 .settings-actions {
@@ -610,11 +637,6 @@ main {
 
 .worktrees-table th {
   background: rgba(180, 150, 12, 0.15);
-  font-family: var(--font-pixel);
-  font-size: 0.5rem;
-  letter-spacing: 1px;
-  color: var(--accent-gold);
-  text-transform: uppercase;
 }
 
 /* ---- Logs ---- */
@@ -683,10 +705,6 @@ main {
 }
 
 .folder-modal {
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  border-radius: 36px;
   width: 850px;
   max-width: 95vw;
   display: flex;
@@ -818,11 +836,7 @@ main {
 }
 
 .detection-title {
-  font-family: var(--font-pixel);
   font-size: 0.55rem;
-  letter-spacing: 1px;
-  color: var(--accent-gold);
-  text-transform: uppercase;
   margin-bottom: 0.6rem;
 }
 
@@ -854,11 +868,9 @@ main {
 }
 
 .detection-label {
-  font-family: var(--font-pixel);
   font-size: 0.45rem;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  text-transform: uppercase;
   min-width: 100px;
   flex-shrink: 0;
 }
@@ -870,24 +882,9 @@ main {
 }
 
 .detection-value input {
-  background: var(--panel-bg);
-  border: 2px solid var(--border-inner);
-  border-radius: 4px;
   color: var(--text-bright);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
   padding: 0.3rem 0.5rem;
   width: 100%;
-}
-
-.detection-value input:focus {
-  outline: none;
-  border-color: var(--accent-gold);
-}
-
-.detection-value input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.6;
 }
 
 .path-input-row {

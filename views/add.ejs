@@ -7,9 +7,7 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header>
-    <h1><a href="/">🏠 jump.sh</a></h1>
-  </header>
+  <%- include('partials/_header') %>
 
   <main>
     <form action="/projects" method="POST">
@@ -27,39 +25,39 @@
         </div>
       </div>
 
-      <div class="form-container" id="fields-section" style="display: none;">
-          <div id="detection-loading" class="detection-loading" style="display: none;">detecting...</div>
-          <div id="detection-error" class="detection-error" style="display: none;"></div>
+      <div class="form-container hidden" id="fields-section">
+          <div id="detection-loading" class="detection-loading hidden">detecting...</div>
+          <div id="detection-error" class="detection-error hidden"></div>
 
           <div class="form-group">
-            <label>Project Directory</label>
+            <label class="label">Project Directory</label>
             <div class="path-display has-path" id="path-display"></div>
           </div>
 
           <div class="form-group">
-            <label for="name">Project Name</label>
-            <input type="text" id="name" name="name" required placeholder="my-app">
+            <label class="label" for="name">Project Name</label>
+            <input class="input" type="text" id="name" name="name" required placeholder="my-app">
             <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
           </div>
 
           <div class="form-group">
-            <label for="detect-install">Build Command</label>
-            <input type="text" id="detect-install" name="override_build_command" placeholder="—">
+            <label class="label" for="detect-install">Build Command</label>
+            <input class="input" type="text" id="detect-install" name="override_build_command" placeholder="—">
           </div>
 
           <div class="form-group">
-            <label for="detect-dev">Start Command</label>
-            <input type="text" id="detect-dev" name="override_start_command" placeholder="—">
+            <label class="label" for="detect-dev">Start Command</label>
+            <input class="input" type="text" id="detect-dev" name="override_start_command" placeholder="—">
           </div>
 
           <div class="form-group">
-            <label for="detect-port">Port</label>
-            <input type="text" id="detect-port" name="override_port" placeholder="—">
+            <label class="label" for="detect-port">Port</label>
+            <input class="input" type="text" id="detect-port" name="override_port" placeholder="—">
           </div>
 
           <div class="form-group">
-            <label for="detect-docker-image">Docker Image</label>
-            <input type="text" id="detect-docker-image" name="override_docker_image" placeholder="—">
+            <label class="label" for="detect-docker-image">Docker Image</label>
+            <input class="input" type="text" id="detect-docker-image" name="override_docker_image" placeholder="—">
           </div>
 
           <div class="form-actions">
@@ -88,8 +86,8 @@
           var loading = document.getElementById('detection-loading');
           var error = document.getElementById('detection-error');
 
-          loading.style.display = '';
-          error.style.display = 'none';
+          loading.classList.remove('hidden');
+          error.classList.add('hidden');
 
           fetch('/api/detect?path=' + encodeURIComponent(projectPath))
             .then(function (res) {
@@ -97,10 +95,10 @@
               return res.json();
             })
             .then(function (data) {
-              loading.style.display = 'none';
+              loading.classList.add('hidden');
               if (data.error) {
                 error.textContent = data.error;
-                error.style.display = '';
+                error.classList.remove('hidden');
                 return;
               }
               detectedDefaults = {
@@ -115,9 +113,9 @@
               document.getElementById('detect-docker-image').value = detectedDefaults.dockerImage;
             })
             .catch(function (err) {
-              loading.style.display = 'none';
+              loading.classList.add('hidden');
               error.textContent = err.message;
-              error.style.display = '';
+              error.classList.remove('hidden');
             });
         }
 
@@ -125,7 +123,7 @@
           var name = folderToName(this.value);
           if (this.value) {
             pathDisplay.textContent = this.value;
-            fieldsSection.style.display = '';
+            fieldsSection.classList.remove('hidden');
           }
           if (name && !nameInput.dataset.userEdited) {
             nameInput.value = name;
