@@ -114,29 +114,32 @@ function detectNode(projectPath) {
 
   // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
   if (scripts.dev && !scripts.dev.includes('vite')) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev -- --host`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
-  // Framework detection
+  // Framework detection (Astro before Vite since Astro uses Vite internally)
+  if (deps.astro) {
+    return { type: 'node', framework: 'astro', devCommand: `${pm.run} dev -- --host`, port: 4321, packageManager: pm, installCommand: pm.install, dockerImage: image };
+  }
   if (deps.vite || (scripts.dev && scripts.dev.includes('vite'))) {
-    return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev`, port: 5173, packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev -- --host`, port: 5173, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
   if (deps.next) {
-    return { type: 'node', framework: 'next', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: 'next', devCommand: `${pm.run} dev -- --host`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
   if (deps.nuxt) {
-    return { type: 'node', framework: 'nuxt', devCommand: `${pm.run} dev`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: 'nuxt', devCommand: `${pm.run} dev -- --host`, port: 3000, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Has a dev script
   if (scripts.dev) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev -- --host`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Has a start script
   if (scripts.start) {
     const startCmd = pm.name === 'yarn' ? 'yarn start' : `${pm.run} start`;
-    return { type: 'node', framework: null, devCommand: startCmd, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    return { type: 'node', framework: null, devCommand: `${startCmd} -- --host`, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Fallback: find entrypoint
