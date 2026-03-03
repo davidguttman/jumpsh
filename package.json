@@ -22,6 +22,8 @@
   ],
   "author": "David Guttman",
   "license": "MIT",
+  "engines": { "node": ">=18" },
+  "os": ["darwin", "linux"],
   "files": [
     "bin/",
     "lib/",
