@@ -366,6 +366,23 @@ class DockerManager {
   getHealth(projectId) {
     return this.healthStates.get(projectId?.toString()) || 'unknown';
   }
+
+  /**
+   * Like getHealth, but if a project is running with 'unknown' health
+   * (e.g. after server restart), trigger a background probe and return
+   * 'starting' so the UI shows a spinner instead of broken links.
+   */
+  getHealthWithProbe(project, status) {
+    const health = this.getHealth(project.id);
+    if (health === 'unknown' && status.running) {
+      this.healthStates.set(project.id.toString(), 'starting');
+      this.getPort(project).then(port => {
+        if (port) this._probeHealth(project, port);
+      });
+      return 'starting';
+    }
+    return health;
+  }
 }
 
 export default DockerManager;
