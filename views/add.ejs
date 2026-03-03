@@ -10,7 +10,7 @@
   <%- include('partials/_header') %>
 
   <main>
-    <form action="/projects" method="POST">
+    <form action="/projects" method="POST" id="add-form">
       <input type="hidden" id="path" name="path" required>
 
       <div class="add-browser-wide">
@@ -29,15 +29,19 @@
           <div id="detection-loading" class="detection-loading hidden">detecting...</div>
           <div id="detection-error" class="detection-error hidden"></div>
 
+          <div id="form-error" class="form-error" role="alert" aria-live="polite" style="display: none;"></div>
+
           <div class="form-group">
             <label class="label">Project Directory</label>
             <div class="path-display has-path" id="path-display"></div>
+            <div class="field-error" id="error-path" aria-live="polite"></div>
           </div>
 
           <div class="form-group">
             <label class="label" for="name">Project Name</label>
             <input class="input" type="text" id="name" name="name" required placeholder="my-app">
             <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
+            <div class="field-error" id="error-name" aria-live="polite"></div>
           </div>
 
           <div class="form-group">
@@ -62,7 +66,7 @@
 
           <div class="form-actions">
             <a href="/" class="btn">Cancel</a>
-            <button type="submit" class="btn btn-primary">Add Project</button>
+            <button type="submit" class="btn btn-primary" id="submit-btn">Add Project</button>
           </div>
       </div>
 
@@ -120,6 +124,7 @@
         }
 
         pathInput.addEventListener('change', function() {
+          clearFieldError('path');
           var name = folderToName(this.value);
           if (this.value) {
             pathDisplay.textContent = this.value;
@@ -135,10 +140,53 @@
         nameInput.addEventListener('input', function() {
           nameInput.dataset.userEdited = this.value ? 'true' : '';
           subdomainPreview.textContent = (this.value || 'my-app').replace(/\./g, '-');
+          clearFieldError('name');
         });
 
-        // On submit, clear override fields that match detected defaults (no override needed)
-        document.querySelector('form').addEventListener('submit', function() {
+        // --- Inline error helpers ---
+        function clearAllErrors() {
+          var formError = document.getElementById('form-error');
+          formError.style.display = 'none';
+          formError.textContent = '';
+          var fieldErrors = document.querySelectorAll('.field-error');
+          for (var i = 0; i < fieldErrors.length; i++) {
+            fieldErrors[i].textContent = '';
+            fieldErrors[i].style.display = 'none';
+          }
+          nameInput.removeAttribute('aria-invalid');
+        }
+
+        function clearFieldError(field) {
+          var el = document.getElementById('error-' + field);
+          if (el) { el.textContent = ''; el.style.display = 'none'; }
+          if (field === 'name') nameInput.removeAttribute('aria-invalid');
+        }
+
+        function showError(data) {
+          // Field-level error
+          if (data.field) {
+            var el = document.getElementById('error-' + data.field);
+            if (el) {
+              el.textContent = data.error;
+              el.style.display = '';
+            }
+            if (data.field === 'name') {
+              nameInput.setAttribute('aria-invalid', 'true');
+              nameInput.focus();
+            }
+          }
+          // Always show form-level error too
+          var formError = document.getElementById('form-error');
+          formError.textContent = data.error;
+          formError.style.display = '';
+        }
+
+        // --- Async form submission ---
+        document.getElementById('add-form').addEventListener('submit', function(e) {
+          e.preventDefault();
+          clearAllErrors();
+
+          // Clear override fields that match detected defaults (no override needed)
           var installInput = document.getElementById('detect-install');
           var devInput = document.getElementById('detect-dev');
           var portInput = document.getElementById('detect-port');
@@ -147,6 +195,36 @@
           if (devInput.value === detectedDefaults.dev) devInput.value = '';
           if (portInput.value === detectedDefaults.port) portInput.value = '';
           if (dockerImageInput.value === detectedDefaults.dockerImage) dockerImageInput.value = '';
+
+          var submitBtn = document.getElementById('submit-btn');
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Adding...';
+
+          var formData = new FormData(this);
+          var body = {};
+          formData.forEach(function(v, k) { body[k] = v; });
+
+          fetch('/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(body)
+          })
+            .then(function(res) {
+              if (res.ok) return res.json();
+              return res.json().then(function(data) { throw data; });
+            })
+            .then(function() {
+              window.location.href = '/';
+            })
+            .catch(function(data) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Add Project';
+              if (data && data.error) {
+                showError(data);
+              } else {
+                showError({ error: 'Something went wrong. Please try again.' });
+              }
+            });
         });
       </script>
     </form>

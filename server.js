@@ -161,35 +161,64 @@ app.get('/add', (req, res) => {
   res.render('add', { config: req.requestConfig, homeDir: os.homedir() });
 });
 
+// Normalize a creation error into { status, error, field?, code? }
+function normalizeProjectError(err) {
+  const msg = (err.message || '').toLowerCase();
+  if (msg.includes('unique constraint') || msg.includes('unique_violation')) {
+    if (msg.includes('subdomain')) return { status: 409, error: 'A project with this subdomain already exists. Choose a different name.', field: 'name', code: 'DUPLICATE_SUBDOMAIN' };
+    if (msg.includes('name')) return { status: 409, error: 'A project with this name already exists. Choose a different name.', field: 'name', code: 'DUPLICATE_NAME' };
+    return { status: 409, error: 'A project with these details already exists.', code: 'DUPLICATE' };
+  }
+  return { status: 500, error: 'Something went wrong while creating the project. Please try again.', code: 'INTERNAL' };
+}
+
 // Create project
 app.post('/projects', (req, res) => {
   const { name, path: projectPath, description, override_build_command, override_start_command, override_port, override_docker_image } = req.body;
+  const wantsJson = req.headers.accept?.includes('application/json') || req.headers['content-type']?.includes('application/json');
 
   if (!name || !projectPath) {
+    if (wantsJson) return res.status(400).json({ error: 'Name and path are required', code: 'MISSING_FIELDS' });
     return res.status(400).send('Name and path are required');
   }
 
-  db.createProject({
-    name, path: projectPath, description,
-    override_build_command: override_build_command || null,
-    override_start_command: override_start_command || null,
-    override_port: override_port ? parseInt(override_port, 10) : null,
-    override_docker_image: override_docker_image || null,
-  }, (err, id) => {
-    if (err) {
-      return res.status(500).send(`Error creating project: ${err.message}`);
+  // Pre-check for duplicate path
+  db.getProjectByPath(projectPath, (pathErr, existingByPath) => {
+    if (pathErr) {
+      console.error('Pre-check path error:', pathErr.message);
+    }
+    if (existingByPath) {
+      const err = { status: 409, error: `This directory is already registered as "${existingByPath.name}".`, field: 'path', code: 'DUPLICATE_PATH' };
+      if (wantsJson) return res.status(err.status).json(err);
+      return res.status(err.status).send(err.error);
     }
 
-    db.getProject(id, async (err, project) => {
-      if (!err && project) {
-        // Start watching for worktrees
-        worktreeScanner.watchProject(project);
-        // Auto-start the project
-        await docker.start(project);
+    db.createProject({
+      name, path: projectPath, description,
+      override_build_command: override_build_command || null,
+      override_start_command: override_start_command || null,
+      override_port: override_port ? parseInt(override_port, 10) : null,
+      override_docker_image: override_docker_image || null,
+    }, (err, id) => {
+      if (err) {
+        console.error('Project creation error:', err.message);
+        const mapped = normalizeProjectError(err);
+        if (wantsJson) return res.status(mapped.status).json(mapped);
+        return res.status(mapped.status).send(mapped.error);
       }
-    });
 
-    res.redirect('/');
+      db.getProject(id, async (err, project) => {
+        if (!err && project) {
+          // Start watching for worktrees
+          worktreeScanner.watchProject(project);
+          // Auto-start the project
+          await docker.start(project);
+        }
+      });
+
+      if (wantsJson) return res.json({ ok: true, id });
+      res.redirect('/');
+    });
   });
 });
 

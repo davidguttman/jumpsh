@@ -861,6 +861,30 @@ main {
   letter-spacing: 0.5px;
 }
 
+.form-error {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--accent-red);
+  letter-spacing: 0.5px;
+  background: rgba(240, 64, 64, 0.1);
+  border: 1px solid var(--accent-red);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  word-break: break-word;
+}
+
+.field-error {
+  font-family: var(--font-pixel);
+  font-size: 0.45rem;
+  color: var(--accent-red);
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+}
+
+.form-group input[aria-invalid="true"] {
+  border-color: var(--accent-red);
+}
+
 .detection-results {
   display: flex;
   flex-direction: column;
