@@ -194,7 +194,9 @@ app.post('/projects/:id/start', (req, res) => {
 
     const result = await docker.start(project);
     if (result.success) {
-      res.json({ success: true, status: result.status, health: docker.getHealth(project.id) });
+      const status = await docker.getStatus(project);
+      const health = docker.getHealthWithProbe(project, status);
+      res.json({ success: true, status: result.status, health });
     } else {
       res.status(500).json({ error: result.error });
     }
