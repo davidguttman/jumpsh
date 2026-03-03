@@ -48,12 +48,12 @@
             </div>
 
             <div class="project-actions">
+              <a href="/projects/<%= project.id %>" class="detail-link">detail</a>
               <% if (project.status === 'running') { %>
                 <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
               <% } else { %>
                 <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
               <% } %>
-              <a href="/projects/<%= project.id %>" class="detail-link">detail</a>
             </div>
 
             <% const worktrees = worktreesByParent[project.id] || []; %>
