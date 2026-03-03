@@ -5,7 +5,7 @@
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
   "main": "server.js",
   "bin": {
-    "jumpsh": "./bin/jumpsh.js"
+    "jump.sh": "./bin/jumpsh.js"
   },
   "scripts": {
     "start": "node server.js",
