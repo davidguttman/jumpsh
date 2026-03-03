@@ -426,9 +426,8 @@ main {
   width: 100%;
   padding: 0.6rem;
   background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  background: var(--panel-bg);
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
   color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -540,9 +539,8 @@ main {
   width: 100%;
   padding: 0.4rem 0.6rem;
   background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  background: var(--panel-bg);
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
   color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -635,12 +633,9 @@ main {
 }
 
 #logs {
-  background: var(--panel-bg);
-  border-radius: 36px;
-  border-image: url('/assets/borders/plain.gif') 32 round;
-  
   background: var(--bg-card-inner);
-  
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
   padding: 1rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -872,9 +867,8 @@ main {
 
 .detection-value input {
   background: var(--panel-bg);
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
   color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -905,10 +899,9 @@ main {
 .path-display {
   flex: 1;
   padding: 0.6rem;
-  background: var(--panel-bg);
-  border: 24px solid;
-  border-image: url('/assets/borders/plain.gif') 32 round;
   background: var(--bg-color);
+  border: 2px solid var(--border-inner);
+  border-radius: 4px;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 0.9rem;
