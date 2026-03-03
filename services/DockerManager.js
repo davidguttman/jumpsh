@@ -213,6 +213,41 @@ class DockerManager {
     return this.start(project);
   }
 
+  /**
+   * Full cleanup: remove containers + volumes, and delete generated compose dir.
+   * Used when a project is being deleted.
+   */
+  async cleanup(project) {
+    const { path: projectPath } = project;
+    const { composePath, isGenerated } = this.getComposeFile(project);
+    this.healthStates.delete(project.id.toString());
+
+    // Remove containers and volumes
+    if (composePath) {
+      try {
+        await execCompose(['down', '-v'], composePath, { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT });
+        projectInfo(projectPath, 'Container cleaned up', { name: project.name });
+      } catch (error) {
+        projectError(projectPath, 'Container cleanup failed', { name: project.name, error: error.message });
+        // Continue with directory cleanup even if down fails
+      }
+    }
+
+    // Remove auto-generated ~/.jump.sh/{slug}/ directory
+    if (isGenerated) {
+      const slug = getProjectSlug(project);
+      const jumpshDir = getJumpshDir(slug);
+      try {
+        fs.rmSync(jumpshDir, { recursive: true, force: true });
+        projectInfo(projectPath, 'Removed generated compose dir', { dir: jumpshDir });
+      } catch (error) {
+        projectError(projectPath, 'Failed to remove compose dir', { dir: jumpshDir, error: error.message });
+      }
+    }
+
+    return { success: true };
+  }
+
   async getStatus(project) {
     const { path: projectPath } = project;
     const { composePath } = this.getComposeFile(project);

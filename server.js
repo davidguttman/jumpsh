@@ -233,16 +233,25 @@ app.get('/projects/:id/logs/stream', (req, res) => {
 });
 
 // Delete project
-app.delete('/projects/:id', (req, res) => {
+app.delete('/projects/:id', async (req, res) => {
   const { id } = req.params;
-  
-  worktreeScanner.unwatchProject(parseInt(id));
-  
-  db.deleteProject(id, (err) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+
+  db.getProject(id, async (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
     }
-    res.json({ success: true });
+
+    // Clean up Docker containers + volumes and generated compose dir
+    await docker.cleanup(project);
+
+    worktreeScanner.unwatchProject(parseInt(id));
+
+    db.deleteProject(id, (err) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ success: true });
+    });
   });
 });
 
