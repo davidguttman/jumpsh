@@ -69,7 +69,8 @@ class Database {
   }
 
   releasePort(projectId, callback) {
-    const project = this.db.data.projects.find(p => p.id === projectId);
+    const numId = parseInt(projectId, 10);
+    const project = this.db.data.projects.find(p => p.id === numId);
     if (project) {
       project.assigned_port = null;
       this._write().then(() => callback(null)).catch(callback);
@@ -112,7 +113,8 @@ class Database {
   }
 
   getProject(id, callback) {
-    const project = this.db.data.projects.find(p => p.id === id) || null;
+    const numId = parseInt(id, 10);
+    const project = this.db.data.projects.find(p => p.id === numId) || null;
     callback(null, project);
   }
 
@@ -158,23 +160,26 @@ class Database {
   }
 
   getWorktreesForProject(projectId, callback) {
+    const numId = parseInt(projectId, 10);
     const worktrees = this.db.data.projects
-      .filter(p => p.parent_project_id === projectId)
+      .filter(p => p.parent_project_id === numId)
       .sort((a, b) => a.name.localeCompare(b.name));
     callback(null, worktrees);
   }
 
   updateProject(id, updates, callback) {
-    const project = this.db.data.projects.find(p => p.id === id);
+    const numId = parseInt(id, 10);
+    const project = this.db.data.projects.find(p => p.id === numId);
     if (!project) return callback(null);
     Object.assign(project, updates, { updated_at: new Date().toISOString() });
     this._write().then(() => callback(null)).catch(callback);
   }
 
   deleteProject(id, callback) {
+    const numId = parseInt(id, 10);
     // Delete worktrees first, then the project
     this.db.data.projects = this.db.data.projects.filter(
-      p => p.parent_project_id !== id && p.id !== id
+      p => p.parent_project_id !== numId && p.id !== numId
     );
     this._write().then(() => callback(null)).catch(callback);
   }
