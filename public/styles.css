@@ -216,41 +216,6 @@ main {
   text-decoration: none;
 }
 
-/* ---- Status Badge ---- */
-.status-badge {
-  font-family: var(--font-pixel);
-  font-size: 0.5rem;
-  padding: 0.2rem 0.5rem;
-  border: 2px solid;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.status-badge.running {
-  border-color: var(--accent-green);
-  color: var(--accent-green);
-  background: rgba(68, 255, 68, 0.1);
-}
-
-.status-badge.stopped {
-  border-color: #666;
-  color: #888;
-  background: rgba(100, 100, 100, 0.1);
-}
-
-.status-badge.starting {
-  border-color: var(--accent-gold);
-  color: var(--accent-gold);
-  background: rgba(216, 200, 48, 0.1);
-  animation: pulse 1s infinite;
-}
-
-.status-badge.unhealthy {
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-  background: rgba(240, 64, 64, 0.1);
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -286,7 +251,6 @@ main {
 }
 
 .detail-link {
-  margin-left: auto;
   font-family: var(--font-pixel);
   font-size: 0.55rem;
   color: var(--text);

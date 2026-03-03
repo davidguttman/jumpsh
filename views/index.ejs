@@ -28,12 +28,7 @@
           <div class="project-card <%= project.status %>">
             <div class="project-header">
               <h2><a href="/projects/<%= project.id %>"><%= project.name %></a></h2>
-              <span class="status-badge <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" data-project-id="<%= project.id %>"><%=
-                health === 'starting' ? 'STARTING...' :
-                health === 'healthy' ? 'RUNNING' :
-                health === 'unhealthy' ? 'FAILED' :
-                project.status === 'running' ? 'RUNNING' : 'STOPPED'
-              %></span>
+              <a href="/projects/<%= project.id %>" class="detail-link">detail</a>
             </div>
 
 
@@ -48,7 +43,6 @@
             </div>
 
             <div class="project-actions">
-              <a href="/projects/<%= project.id %>" class="detail-link">detail</a>
               <% if (project.status === 'running') { %>
                 <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
               <% } else { %>
@@ -90,13 +84,6 @@
       const btn = event.target;
       btn.disabled = true;
       btn.textContent = 'Starting...';
-
-      // Update the badge immediately
-      const badge = document.querySelector(`[data-project-id="${id}"]`);
-      if (badge) {
-        badge.className = 'status-badge starting';
-        badge.textContent = 'STARTING...';
-      }
 
       try {
         const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
