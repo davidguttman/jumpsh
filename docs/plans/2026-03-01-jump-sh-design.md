@@ -6,8 +6,8 @@ Fork localhaus in-place into jump.sh behavior while preserving Docker-based proc
 ## Confirmed decisions
 - Keep Docker runtime and project lifecycle management
 - Keep worktree scanning and branch URL conventions
-- Daemon should run continuously after `jumpsh install`
-- `npx jumpsh` runs foreground daemon
+- Daemon should run continuously after `jump.sh install`
+- `npx jump.sh` runs foreground daemon
 - State stored under `~/.jump.sh/projects.db`
 
 ## MVP scope

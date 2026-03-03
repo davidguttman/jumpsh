@@ -14,7 +14,7 @@ These decisions are authoritative and final. Do not revisit.
 2. **No local DNS setup.** jump.sh removes the local DNS setup burden entirely. No dnsmasq, no `/etc/resolver`, no `/etc/hosts` management, no systemd-resolved config. DNS for `*.jump.sh` is handled externally by the jump.sh service.
 3. **Keep Docker + worktrees + process management.** Core architecture (Docker compose generation, subdomain proxy, worktree scanner) is preserved.
 4. **TLS via mkcert for localhost mode.** Certs are generated locally; future remote mode will distribute certs differently.
-5. **Daemon must be always-running.** `jumpsh install` sets up a system service; `npx jumpsh` is the foreground fallback.
+5. **Daemon must be always-running.** `jump.sh install` sets up a system service; `npx jump.sh` is the foreground fallback.
 6. **State at `~/.jump.sh/projects.db`.** Fresh DB only — no migration from `.localhaus`.
 7. **CLI commands:** `add`, `remove`, `install`, `login`, `ip`, `ls`, `start`, `stop`, `logs`.
 8. **Node path brittleness must be solved.** Daemon startup must survive nvm/mise/fnm node version changes.
@@ -26,7 +26,7 @@ These decisions are authoritative and final. Do not revisit.
 ## Goals
 
 1. Replace all localhaus naming/paths/config with jump.sh equivalents (clean cut, not migration)
-2. Build CLI entry point (`npx jumpsh`) with full command surface
+2. Build CLI entry point (`npx jump.sh`) with full command surface
 3. Implement always-running daemon via system service (launchd/systemd) with robust foreground fallback
 4. Preserve Docker runtime, compose generation, worktree scanning, and subdomain proxy
 5. Handle port conflicts, signal lifecycle, and log rotation as first-class concerns
@@ -127,28 +127,28 @@ lib/
 Use **`parseArgs`** from `node:util` (zero deps, Node 18.3+).
 
 ```
-jumpsh                          # Run daemon in foreground (default)
-jumpsh add [path]               # Add project at path (default: cwd)
-jumpsh remove <name>            # Remove project from DB; --clean removes .jump.sh/ dir
-jumpsh install                  # Install daemon service + generate certs
-jumpsh install --uninstall      # Remove daemon service + optionally clean state
-jumpsh login                    # (stub) Future remote auth
-jumpsh ip                       # Print LAN IP address
-jumpsh ls                       # List projects with status
-jumpsh start [name]             # Start project containers
-jumpsh stop [name]              # Stop project containers
-jumpsh logs [name]              # Tail logs (--follow default, --lines=N)
+jump.sh                          # Run daemon in foreground (default)
+jump.sh add [path]               # Add project at path (default: cwd)
+jump.sh remove <name>            # Remove project from DB; --clean removes .jump.sh/ dir
+jump.sh install                  # Install daemon service + generate certs
+jump.sh install --uninstall      # Remove daemon service + optionally clean state
+jump.sh login                    # (stub) Future remote auth
+jump.sh ip                       # Print LAN IP address
+jump.sh ls                       # List projects with status
+jump.sh start [name]             # Start project containers
+jump.sh stop [name]              # Stop project containers
+jump.sh logs [name]              # Tail logs (--follow default, --lines=N)
 ```
 
 ### 2.3 Command behavior details
 
-**`jumpsh` (no subcommand)** — Run daemon in foreground.
+**`jump.sh` (no subcommand)** — Run daemon in foreground.
 - Checks for port conflict before binding (see Phase-level port strategy below)
 - Starts Express server, SubdomainProxy, WorktreeScanner
 - Logs to stdout
 - Handles SIGTERM/SIGINT/SIGHUP (see signal handling section)
 
-**`jumpsh add [path]`**
+**`jump.sh add [path]`**
 - Resolves `path` to absolute (default: `process.cwd()`)
 - Runs `ProjectDetector.detectProjectType()` to validate it's a recognized project
 - Derives subdomain from directory name via `slugify()`
@@ -156,14 +156,14 @@ jumpsh logs [name]              # Tail logs (--follow default, --lines=N)
 - Inserts into DB; prints assigned subdomain
 - Scans for `.worktrees/` and registers any found
 
-**`jumpsh remove <name>`**
+**`jump.sh remove <name>`**
 - Looks up project by name or subdomain in DB
 - If containers are running: stop them first (with confirmation prompt, or `--force` to skip)
 - Deletes DB row (and any worktree child rows)
 - With `--clean`: also deletes `<project>/.jump.sh/` generated directory
 - Prints confirmation
 
-**`jumpsh install`**
+**`jump.sh install`**
 - Detects OS (darwin/linux)
 - Generates mkcert certs at `~/.jump.sh/certs/` (installs mkcert if missing, or errors with instructions)
 - Writes daemon service file using wrapper script (see Node path strategy below)
@@ -171,7 +171,7 @@ jumpsh logs [name]              # Tail logs (--follow default, --lines=N)
 - Runs `enable-low-port-bind-linux.sh` on Linux if binding to port < 1024
 - Prints success summary with next steps
 
-**`jumpsh install --uninstall`**
+**`jump.sh install --uninstall`**
 - Stops the daemon service
 - Disables the service
 - Removes the service file
@@ -179,35 +179,35 @@ jumpsh logs [name]              # Tail logs (--follow default, --lines=N)
 - Does NOT remove per-project `.jump.sh/` dirs (those belong to the project)
 - Prints summary of what was removed
 
-**`jumpsh ip`**
+**`jump.sh ip`**
 - Uses `os.networkInterfaces()` to find first non-internal IPv4 address
 - Prints it
 
-**`jumpsh ls`**
+**`jump.sh ls`**
 - Queries all projects from DB
 - For each, checks Docker container status via `DockerManager.status()`
 - Prints table: `name | subdomain | status | port | path`
 - Worktrees indented under parent
 
-**`jumpsh start [name]`**
+**`jump.sh start [name]`**
 - Looks up project by name/subdomain in DB
 - If no name given and cwd is a registered project, use that
 - Calls `DockerManager.start(project)`
 - Prints URL on success
 
-**`jumpsh stop [name]`**
+**`jump.sh stop [name]`**
 - Looks up project by name/subdomain in DB
 - If no name given and cwd is a registered project, use that
 - Calls `DockerManager.stop(project)`
 
-**`jumpsh logs [name]`**
+**`jump.sh logs [name]`**
 - Looks up project by name/subdomain in DB
 - If no name given and cwd is a registered project, use that
 - Options: `--follow` (default: true), `--lines=N` (default: 100), `--no-follow`
 - Calls `DockerManager.logs(project)` with options
 - Pipes stdout/stderr to terminal
 
-**`jumpsh login`**
+**`jump.sh login`**
 - Prints: `Remote login is not yet available. Running in localhost mode.`
 
 ### 2.4 Exit codes
@@ -236,7 +236,7 @@ jumpsh logs [name]              # Tail logs (--follow default, --lines=N)
 ## Phase 3 — Daemon & Service Management
 
 ### 3.1 Foreground mode
-`npx jumpsh` (no subcommand) starts the Express server in-process:
+`npx jump.sh` (no subcommand) starts the Express server in-process:
 - Binds to `JUMPSH_PORT` (default 5050) or 443 (if HTTPS + low-port capable)
 - Starts SubdomainProxy, WorktreeScanner
 - Logs to stdout
@@ -265,7 +265,7 @@ exec node "PACKAGE_ROOT/server.js"
 - `PACKAGE_ROOT` is resolved at install time via `import.meta.url`
 - The service file (plist/systemd) points to this wrapper, not to a node binary
 - Wrapper re-resolves node on every daemon start, so version manager changes take effect on next restart
-- Wrapper is regenerated by `jumpsh install`
+- Wrapper is regenerated by `jump.sh install`
 
 ### 3.3 Daemon install — macOS (launchd)
 
@@ -355,8 +355,8 @@ Force-kill timeout: if graceful shutdown takes > 10s, `process.exit(1)`.
 - [ ] macOS: `launchctl print gui/$(id -u)/sh.jump.daemon` shows service
 - [ ] Linux: `systemctl --user status jumpsh` shows active
 - [ ] Kill daemon process → auto-restarts within 3s
-- [ ] After `nvm install <new-version>` + `jumpsh install` → daemon still starts
-- [ ] `jumpsh install --uninstall` → service gone, wrapper script gone
+- [ ] After `nvm install <new-version>` + `jump.sh install` → daemon still starts
+- [ ] `jump.sh install --uninstall` → service gone, wrapper script gone
 - [ ] Foreground mode: Ctrl-C → clean shutdown, exit 0
 - [ ] Foreground mode with port in use → exit code 4, actionable message
 
@@ -386,10 +386,10 @@ Force-kill timeout: if graceful shutdown takes > 10s, `process.exit(1)`.
 - Uses `container_name: ${project.subdomain}` — unchanged, subdomain comes from DB
 
 ### Verification
-- [ ] `jumpsh add .` in a project → `.jump.sh/docker-compose.yml` and `.jump.sh/Dockerfile` created
+- [ ] `jump.sh add .` in a project → `.jump.sh/docker-compose.yml` and `.jump.sh/Dockerfile` created
 - [ ] `docker compose -f .jump.sh/docker-compose.yml up` works
-- [ ] Worktree added → appears in `jumpsh ls` with branch-based subdomain
-- [ ] `jumpsh start` on worktree project → container starts with correct name
+- [ ] Worktree added → appears in `jump.sh ls` with branch-based subdomain
+- [ ] `jump.sh start` on worktree project → container starts with correct name
 
 ---
 
@@ -406,7 +406,7 @@ mkcert -cert-file ~/.jump.sh/certs/server.pem \
 
 - `mkcert -install` adds local CA to system trust store
 - Certs stored at `~/.jump.sh/certs/`
-- `jumpsh install` generates these certs as part of setup
+- `jump.sh install` generates these certs as part of setup
 
 ### 5.2 Server TLS config
 - `server.js` reads `JUMPSH_CERT_PATH` (default `~/.jump.sh/certs`)
@@ -416,11 +416,11 @@ mkcert -cert-file ~/.jump.sh/certs/server.pem \
 
 ### 5.3 Low-port binding (Linux)
 - `scripts/enable-low-port-bind-linux.sh` grants `cap_net_bind_service` to node binary
-- Run during `jumpsh install` if `JUMPSH_PORT` < 1024
+- Run during `jump.sh install` if `JUMPSH_PORT` < 1024
 - If setcap fails (e.g., no sudo): fall back to high port, print warning
 
 ### Verification
-- [ ] After `jumpsh install`: cert files exist at `~/.jump.sh/certs/`
+- [ ] After `jump.sh install`: cert files exist at `~/.jump.sh/certs/`
 - [ ] `openssl x509 -in ~/.jump.sh/certs/server.pem -text` shows `*.jump.sh` SAN
 - [ ] HTTPS server starts; `curl -v https://localhost:443` shows valid cert
 - [ ] Without certs: server starts on HTTP with warning message
@@ -456,7 +456,7 @@ Unchanged from current `projects` table. The `ALTER TABLE ADD COLUMN assigned_po
 
 ### Verification
 - [ ] Fresh start: `~/.jump.sh/projects.db` created
-- [ ] `jumpsh add` + `jumpsh ls` → data round-trips correctly
+- [ ] `jump.sh add` + `jump.sh ls` → data round-trips correctly
 - [ ] WAL mode active: `sqlite3 ~/.jump.sh/projects.db "PRAGMA journal_mode"` → `wal`
 
 ---
@@ -469,7 +469,7 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 1. Before `server.listen()`, probe the port with a throwaway `net.createServer()`
 2. If `EADDRINUSE`:
    - Identify the owning process: parse `lsof -i :PORT -t` (macOS/Linux)
-   - If it's another jumpsh instance: print `jump.sh daemon is already running (PID XXXX). Use 'jumpsh stop' or kill it first.`
+   - If it's another jump.sh instance: print `jump.sh daemon is already running (PID XXXX). Use 'jump.sh stop' or kill it first.`
    - If it's something else: print `Port PORT is in use by process XXXX (PROCESSNAME). Set JUMPSH_PORT=OTHERPORT or stop the conflicting process.`
    - Exit code 4
 3. Never silently pick a different daemon port — the daemon port must be predictable for the proxy to work
@@ -483,7 +483,7 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
    - Retry once with a new port (regenerate compose file)
    - If retry fails: print error with the conflicting port and exit code 4
 
-### Port allocation on `jumpsh remove`
+### Port allocation on `jump.sh remove`
 - When removing a project, release its `assigned_port` (set to NULL in DB, or delete the row)
 - This returns the port to the pool for future projects
 
@@ -510,7 +510,7 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 
 ### Per-project container logs
 - Container logs are managed by Docker's logging driver (default: `json-file`)
-- `jumpsh logs <name>` reads from Docker, not from files
+- `jump.sh logs <name>` reads from Docker, not from files
 - The generated `docker-compose.yml` should set logging options:
   ```yaml
   logging:
@@ -522,8 +522,8 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
   This prevents runaway container logs from filling disk.
 
 ### Foreground mode logging
-- When running `npx jumpsh` (foreground), all output goes to stdout/stderr directly
-- `dev.log` is still written (same events), so `jumpsh logs` for the daemon itself can reference it
+- When running `npx jump.sh` (foreground), all output goes to stdout/stderr directly
+- `dev.log` is still written (same events), so `jump.sh logs` for the daemon itself can reference it
 - No rotation needed for terminal output
 
 ### Verification
@@ -584,8 +584,8 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 - [ ] Container starts with correct port mapping
 
 ### After Phase 3 (Daemon)
-- [ ] `jumpsh install` → service running, wrapper script at `~/.jump.sh/jumpsh-daemon.sh`
-- [ ] `jumpsh install --uninstall` → service removed, wrapper removed
+- [ ] `jump.sh install` → service running, wrapper script at `~/.jump.sh/jumpsh-daemon.sh`
+- [ ] `jump.sh install --uninstall` → service removed, wrapper removed
 - [ ] Daemon auto-restarts after crash (kill -9)
 - [ ] SIGTERM → graceful shutdown within 10s
 - [ ] SIGINT → same as SIGTERM
@@ -594,13 +594,13 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 - [ ] Log rotation: files stay under 10 MB
 
 ### End-to-end
-- [ ] `npx jumpsh install` → certs + daemon running
-- [ ] `cd ~/my-project && npx jumpsh add .` → project registered
-- [ ] `npx jumpsh start my-project` → container running
-- [ ] `npx jumpsh logs my-project` → live output
-- [ ] `npx jumpsh stop my-project` → container stopped
-- [ ] `npx jumpsh remove my-project --clean` → DB row gone, `.jump.sh/` dir gone
-- [ ] `npx jumpsh install --uninstall` → clean system
+- [ ] `npx jump.sh install` → certs + daemon running
+- [ ] `cd ~/my-project && npx jump.sh add .` → project registered
+- [ ] `npx jump.sh start my-project` → container running
+- [ ] `npx jump.sh logs my-project` → live output
+- [ ] `npx jump.sh stop my-project` → container stopped
+- [ ] `npx jump.sh remove my-project --clean` → DB row gone, `.jump.sh/` dir gone
+- [ ] `npx jump.sh install --uninstall` → clean system
 - [ ] Reboot → daemon auto-starts
 
 ---
@@ -608,11 +608,11 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 ## Risks & Mitigations
 
 ### R1: mkcert not installed or unavailable
-**Risk:** `jumpsh install` cannot generate certs.
+**Risk:** `jump.sh install` cannot generate certs.
 **Mitigation:** Check for `mkcert` at start of `install`. If missing: print platform-specific install instructions (`brew install mkcert`, `sudo apt install mkcert`, etc.) and exit with clear error. Do not attempt to auto-install system packages.
 
 ### R2: Docker not running or not installed
-**Risk:** `jumpsh start` fails opaquely.
+**Risk:** `jump.sh start` fails opaquely.
 **Mitigation:** Check `docker info` before any Docker operation. If Docker is not available, exit code 5 with message: `Docker is not running. Start Docker Desktop or install Docker Engine.`
 
 ### R3: SQLite DB locked by concurrent access
@@ -621,15 +621,15 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 
 ### R4: Port range exhaustion
 **Risk:** All 1000 ports in 10000–10999 allocated (unlikely but possible with many projects).
-**Mitigation:** Extend to 11000–11999 with a notice. If that's also full, error with: `No free ports available. Remove unused projects with 'jumpsh remove'.`
+**Mitigation:** Extend to 11000–11999 with a notice. If that's also full, error with: `No free ports available. Remove unused projects with 'jump.sh remove'.`
 
-### R5: Partial `jumpsh install` failure
+### R5: Partial `jump.sh install` failure
 **Risk:** Cert generation succeeds but service file write fails (or vice versa), leaving system in inconsistent state.
 **Mitigation:** See rollback playbook below.
 
 ### R6: `setcap` lost after Node update
 **Risk:** On Linux, `cap_net_bind_service` is lost when Node binary is replaced by version manager.
-**Mitigation:** Daemon startup on port < 1024: if `EACCES`, print `Low-port binding failed. Re-run 'jumpsh install' to fix, or set JUMPSH_PORT=5050.` and exit code 4.
+**Mitigation:** Daemon startup on port < 1024: if `EACCES`, print `Low-port binding failed. Re-run 'jump.sh install' to fix, or set JUMPSH_PORT=5050.` and exit code 4.
 
 ### R7: Wrapper script can't find Node
 **Risk:** `jumpsh-daemon.sh` fails to resolve node if version manager setup changes.
@@ -639,7 +639,7 @@ Port conflicts can occur at two levels: the daemon port and per-project containe
 
 ## Rollback Playbook
 
-### `jumpsh install` — partial failure recovery
+### `jump.sh install` — partial failure recovery
 
 The install command tracks progress through discrete steps. If any step fails, it prints what succeeded and what failed, so the user can re-run or manually clean up.
 
@@ -657,9 +657,9 @@ The install command tracks progress through discrete steps. If any step fails, i
 **Implementation:** Each step is wrapped in try/catch. On failure:
 1. Print which step failed and the error
 2. Undo completed steps in reverse order
-3. Print: `Install failed at step N. The following was cleaned up: [list]. Re-run 'jumpsh install' after fixing the issue.`
+3. Print: `Install failed at step N. The following was cleaned up: [list]. Re-run 'jump.sh install' after fixing the issue.`
 
-### `jumpsh install --uninstall` — cleanup
+### `jump.sh install --uninstall` — cleanup
 
 | Step | Action | Notes |
 |---|---|---|
@@ -700,22 +700,22 @@ rm -rf ~/.jump.sh
 
 These are not required for MVP but are natural follow-ons. Listed here for future reference.
 
-1. **`jumpsh status`** — Richer than `ls`. Show daemon uptime, port, cert expiry, Docker version, disk usage of containers.
+1. **`jump.sh status`** — Richer than `ls`. Show daemon uptime, port, cert expiry, Docker version, disk usage of containers.
 
-2. **`jumpsh open [name]`** — Open project URL in default browser (`xdg-open` / `open`).
+2. **`jump.sh open [name]`** — Open project URL in default browser (`xdg-open` / `open`).
 
-3. **`jumpsh restart [name]`** — Convenience alias for `stop` + `start`.
+3. **`jump.sh restart [name]`** — Convenience alias for `stop` + `start`.
 
-4. **`jumpsh update`** — Re-detect project type and regenerate `.jump.sh/Dockerfile` + `docker-compose.yml`. Useful after changing frameworks.
+4. **`jump.sh update`** — Re-detect project type and regenerate `.jump.sh/Dockerfile` + `docker-compose.yml`. Useful after changing frameworks.
 
-5. **Auto-add on `cd`** — Shell hook (bash/zsh) that runs `jumpsh add .` when entering a directory with a recognized project that isn't registered yet. Opt-in via `jumpsh shell-hook`.
+5. **Auto-add on `cd`** — Shell hook (bash/zsh) that runs `jump.sh add .` when entering a directory with a recognized project that isn't registered yet. Opt-in via `jump.sh shell-hook`.
 
-6. **Health checks** — Add Docker healthcheck to generated compose files. Surface health status in `jumpsh ls`.
+6. **Health checks** — Add Docker healthcheck to generated compose files. Surface health status in `jump.sh ls`.
 
-7. **Remote mode scaffolding** — `jumpsh login` connects to jump.sh cloud service, receives a subdomain allocation (`user.jump.sh`), and configures DNS + TLS via API. This replaces mkcert with real certs.
+7. **Remote mode scaffolding** — `jump.sh login` connects to jump.sh cloud service, receives a subdomain allocation (`user.jump.sh`), and configures DNS + TLS via API. This replaces mkcert with real certs.
 
 8. **Tab completion** — Generate bash/zsh/fish completions for project names in `start`, `stop`, `logs`, `remove`.
 
 9. **Config file** — `~/.jump.sh/config.json` for persistent settings (default port, preferred port range, auto-start projects on daemon boot).
 
-10. **`jumpsh doctor`** — Diagnostic command that checks: Docker running, certs valid, port available, DB writable, service installed. Prints pass/fail for each.
+10. **`jump.sh doctor`** — Diagnostic command that checks: Docker running, certs valid, port available, DB writable, service installed. Prints pass/fail for each.

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Replace the existing token-based `jumpsh register` with a zero-touch SSH-key flow that authenticates via GitHub identity, provisions `*.{username}.jump.sh` DNS + wildcard TLS cert, and downloads certs locally.
+Replace the existing token-based `jump.sh register` with a zero-touch SSH-key flow that authenticates via GitHub identity, provisions `*.{username}.jump.sh` DNS + wildcard TLS cert, and downloads certs locally.
 
 ---
 
@@ -139,7 +139,7 @@ In `lib/cli.js` HELP string, update the `register` line:
 
 | Concern | Decision |
 |---------|----------|
-| Old `register` command (token-based) | **Replace entirely.** It depends on `jumpsh login --token` which is being superseded. |
+| Old `register` command (token-based) | **Replace entirely.** It depends on `jump.sh login --token` which is being superseded. |
 | Old `login` command | **Keep as-is.** Not touched. |
 | Old `status` / `sync` commands | **Keep as-is.** Orthogonal. |
 | Shared certs (`server.pem`) | **Keep working.** The `certs` command and `certsExist()` unchanged. |
@@ -189,25 +189,25 @@ Note: `lib/commands/certs.js` is NOT modified. The new register flow handles its
 
 ```bash
 # Happy path
-jumpsh register
+jump.sh register
 
 # Custom IP
-jumpsh register --ip 100.64.1.2
+jump.sh register --ip 100.64.1.2
 
 # Username override
-jumpsh register --username someuser
+jump.sh register --username someuser
 
 # Dev API
-JUMPSH_API=http://localhost:3000 jumpsh register
+JUMPSH_API=http://localhost:3000 jump.sh register
 
 # Verify cert files
 ls -la ~/.jump.sh/certs/$USER/
 
 # Error: no SSH key in agent
-SSH_AUTH_SOCK= jumpsh register
+SSH_AUTH_SOCK= jump.sh register
 
 # Verify server picks up new certs
-jumpsh  # foreground, check SNI log output
+jump.sh  # foreground, check SNI log output
 ```
 
 ---

@@ -737,13 +737,14 @@ const dashboardUrl = formatUrl(config.dashboardHost);
 
 server.listen(config.port, () => {
   devinfo('Server started', { port: config.port, protocol, domain: config.domain });
+  const pad = (s, w = 41) => s + ' '.repeat(Math.max(0, w - s.length));
   console.log(`
 ╔═══════════════════════════════════════════╗
 ║            jump.sh v0.1.0                 ║
 ╠═══════════════════════════════════════════╣
-║  Dashboard: ${dashboardUrl}
-║  Projects:  ${formatUrl(`*.${config.domain}`)}
-║  Protocol:  ${protocol.toUpperCase()}
+║ ${pad('Dashboard: ' + dashboardUrl)} ║
+║ ${pad('Projects:  ' + formatUrl(`*.${config.domain}`))} ║
+║ ${pad('Protocol:  ' + protocol.toUpperCase())} ║
 ╚═══════════════════════════════════════════╝
   `);
 

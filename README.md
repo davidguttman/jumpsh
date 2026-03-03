@@ -17,14 +17,14 @@ Local dev server with Docker containers + automatic subdomain routing.
 
 ```bash
 # Install
-npx jumpsh install
+npx jump.sh install
 
 # Add a project
 cd ~/my-project
-npx jumpsh add .
+npx jump.sh add .
 
 # Start it
-npx jumpsh start my-project
+npx jump.sh start my-project
 
 # Open in browser
 open https://my-project.jump.sh
@@ -39,21 +39,21 @@ open https://my-project.jump.sh
 ## CLI Commands
 
 ```
-jumpsh                    Run daemon in foreground
-jumpsh add [path]         Register a project (default: current directory)
-jumpsh remove <name>      Unregister a project
-jumpsh install            Install daemon service + download certs
-jumpsh install --uninstall  Remove daemon service
-jumpsh certs              Download TLS certificates
-jumpsh ls                 List projects with status
-jumpsh start [name]       Start project containers
-jumpsh stop [name]        Stop project containers
-jumpsh logs [name]        Tail project logs
-jumpsh ip                 Print LAN IP address
-jumpsh login              Authenticate with remote control plane
-jumpsh register           Register machine for remote routing
-jumpsh status             Show machine + route sync status
-jumpsh sync               Fetch remote routes
+jump.sh                    Run daemon in foreground
+jump.sh add [path]         Register a project (default: current directory)
+jump.sh remove <name>      Unregister a project
+jump.sh install            Install daemon service + download certs
+jump.sh install --uninstall  Remove daemon service
+jump.sh certs              Download TLS certificates
+jump.sh ls                 List projects with status
+jump.sh start [name]       Start project containers
+jump.sh stop [name]        Stop project containers
+jump.sh logs [name]        Tail project logs
+jump.sh ip                 Print LAN IP address
+jump.sh login              Authenticate with remote control plane
+jump.sh register           Register machine for remote routing
+jump.sh status             Show machine + route sync status
+jump.sh sync               Fetch remote routes
 ```
 
 ## Configuration
@@ -72,11 +72,11 @@ JUMPSH_CERT_PATH=~/.jump.sh/certs
 Certificates are downloaded from the jump.sh server:
 
 ```bash
-jumpsh certs
+jump.sh certs
 ```
 
 This fetches `server.pem` and `server-key.pem` into `~/.jump.sh/certs/`.
-`jumpsh install` also downloads certs automatically when `JUMPSH_HTTPS=true`.
+`jump.sh install` also downloads certs automatically when `JUMPSH_HTTPS=true`.
 
 The download endpoint is configurable via `JUMPSH_ORIGIN` (default: `https://jump.sh`).
 
@@ -117,16 +117,16 @@ Connect your local projects to the jump.sh control plane for remote access:
 
 ```bash
 # Authenticate
-jumpsh login --token <YOUR_TOKEN>
+jump.sh login --token <YOUR_TOKEN>
 
 # Register this machine
-jumpsh register
+jump.sh register
 
 # Sync remote routes
-jumpsh sync
+jump.sh sync
 
 # Check status
-jumpsh status
+jump.sh status
 ```
 
 Projects are accessible at `project-name.username.jump.sh` (configurable via `JUMPSH_REMOTE_DOMAIN`).
