@@ -12,6 +12,15 @@
       font-size: 1rem; font-weight: bold; padding: 0; text-decoration: underline;
     }
     .build-logs-toggle:hover { color: #ff8787; }
+    .logs-tabs { display: flex; gap: 0; margin-bottom: 0; }
+    .logs-tab {
+      background: none; border: 1px solid #333; border-bottom: none;
+      color: #888; cursor: pointer; padding: 0.4rem 0.8rem;
+      font-size: 0.85rem; font-family: inherit; border-radius: 4px 4px 0 0;
+    }
+    .logs-tab:hover { color: #ccc; }
+    .logs-tab.active { color: #fff; background: #1a1a1a; border-color: #555; }
+    .logs-output { margin-top: 0; border-top-left-radius: 0; }
     .build-logs-output {
       background: #0d1117; color: #e6edf3; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
       font-size: 0.8rem; line-height: 1.5; padding: 1rem; border-radius: 6px;
@@ -28,18 +37,13 @@
       <div class="project-header">
         <h2><%= project.name %></h2>
         <% const health = project.health || 'unknown'; %>
-        <span class="status-indicator <%= health === 'starting' ? 'starting' : health === 'healthy' ? 'running' : health === 'unhealthy' ? 'unhealthy' : project.status %>" id="status-indicator"><%=
-          health === 'starting' ? 'STARTING...' :
-          health === 'healthy' ? 'RUNNING' :
-          health === 'unhealthy' ? 'FAILED' :
-          project.status === 'running' ? 'RUNNING' : 'STOPPED'
-        %></span>
+        <span class="status-indicator hidden" id="status-indicator"></span>
         <span class="startup-progress hidden" id="startup-progress"></span>
       </div>
 
       <div class="project-info">
-        <p><strong>Path:</strong> <code><%= project.path %></code></p>
-        <p><strong>Subdomain:</strong>
+        <p><code><%= project.path %></code></p>
+        <p>
           <% if (health === 'healthy') { %>
             <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank" id="subdomain-link">
               <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
@@ -48,12 +52,6 @@
             <span id="subdomain-link"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
           <% } %>
         </p>
-        <% if (project.port) { %>
-          <p><strong>Port:</strong> <%= project.port %></p>
-        <% } %>
-        <% if (project.description) { %>
-          <p><strong>Description:</strong> <%= project.description %></p>
-        <% } %>
       </div>
 
       <div class="settings-section">
@@ -110,45 +108,16 @@
         <div class="worktrees-section">
           <h3>Worktrees (<%= worktrees.length %>)</h3>
           <table class="worktrees-table">
-            <thead>
-              <tr>
-                <th class="label">Branch</th>
-                <th class="label">URL</th>
-                <th class="label">Status</th>
-                <th class="label">Actions</th>
-                <th class="label">Logs</th>
-              </tr>
-            </thead>
             <tbody>
               <% for (const wt of worktrees) { %>
                 <tr>
-                  <td><code><%= wt.branch_name %></code></td>
                   <td>
-                    <% const wtHealth = wt.health || 'unknown'; %>
-                    <% if (wtHealth === 'healthy') { %>
-                      <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank">
-                        <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
-                      </a>
-                    <% } else { %>
-                      <%= config.formatUrl(wt.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
-                    <% } %>
+                    <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank">
+                      <code><%= wt.branch_name %></code>
+                    </a>
                   </td>
-                  <td><span class="status-indicator <%= wtHealth === 'starting' ? 'starting' : wtHealth === 'healthy' ? 'running' : wtHealth === 'unhealthy' ? 'unhealthy' : wt.status %>"><%=
-                    wtHealth === 'starting' ? 'STARTING...' :
-                    wtHealth === 'healthy' ? 'RUNNING' :
-                    wtHealth === 'unhealthy' ? 'FAILED' :
-                    wt.status === 'running' ? 'RUNNING' : 'STOPPED'
-                  %></span></td>
-                  <td>
+                  <td style="text-align: right;">
                     <%- include('partials/_action_btn', { id: wt.id, status: wt.status, btnClass: 'btn-sm' }) %>
-                  </td>
-                  <td>
-                    <button class="btn btn-sm wt-logs-toggle" data-wt-id="<%= wt.id %>">logs</button>
-                  </td>
-                </tr>
-                <tr class="wt-logs-row hidden" id="wt-logs-row-<%= wt.id %>">
-                  <td colspan="5" style="padding: 0;">
-                    <pre class="wt-logs-output" id="wt-log-output-<%= wt.id %>" style="max-height: 300px; overflow-y: auto; margin: 0; padding: 0.5rem; background: #1a1a1a; color: #ccc; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word;">No logs yet</pre>
                   </td>
                 </tr>
               <% } %>
@@ -166,11 +135,13 @@
 
       <div class="logs-section">
         <h3>Logs</h3>
-        <div class="logs-toolbar">
-          <button class="btn btn-sm" onclick="refreshLogs()">Refresh</button>
-          <button class="btn btn-sm" onclick="toggleStream()" id="stream-btn">Stream Live</button>
+        <div class="logs-tabs" id="logs-tabs">
+          <button class="logs-tab active" data-log-id="<%= project.id %>" data-log-label="<%= project.name %>"><%= project.name %></button>
+          <% for (const wt of worktrees) { %>
+            <button class="logs-tab" data-log-id="<%= wt.id %>" data-log-label="<%= wt.branch_name %>"><%= wt.branch_name %></button>
+          <% } %>
         </div>
-        <pre id="logs"><%= logs %></pre>
+        <pre class="logs-output" id="logs"><%= logs %></pre>
       </div>
     </div>
   </main>
@@ -273,43 +244,85 @@
       else alert('Error deleting project');
     }
 
-    async function refreshLogs() {
-      location.reload();
-    }
+    // Tabbed log viewer
+    var activeLogId = null;
 
-    function toggleStream() {
-      const btn = document.getElementById('stream-btn');
-      const logsEl = document.getElementById('logs');
+    function switchLogTab(id) {
+      var logsEl = document.getElementById('logs');
 
+      // Disconnect existing stream
       if (eventSource) {
         eventSource.close();
         eventSource = null;
-        btn.textContent = 'Stream Live';
-        return;
       }
 
-      btn.textContent = 'Stop Stream';
-      eventSource = new EventSource(`/projects/${projectId}/logs/stream`);
-      
-      eventSource.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        if (data.line) {
-          logsEl.textContent += data.line + '\n';
-          logsEl.scrollTop = logsEl.scrollHeight;
-        }
-        if (data.closed) {
-          eventSource.close();
-          eventSource = null;
-          btn.textContent = 'Stream Live';
-        }
-      };
+      // Update active tab styling
+      document.querySelectorAll('.logs-tab').forEach(function(tab) {
+        tab.classList.toggle('active', tab.getAttribute('data-log-id') === String(id));
+      });
 
-      eventSource.onerror = () => {
+      activeLogId = id;
+      logsEl.textContent = 'Loading logs...';
+
+      // Fetch history then stream
+      fetch('/projects/' + id + '/logs?lines=200')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          logsEl.textContent = '';
+          if (data.lines && data.lines.length > 0) {
+            data.lines.forEach(function(l) {
+              var span = document.createElement('span');
+              span.textContent = l + '\n';
+              logsEl.appendChild(span);
+            });
+            logsEl.scrollTop = logsEl.scrollHeight;
+          } else {
+            logsEl.textContent = 'No logs yet';
+          }
+          startLogStream(id);
+        })
+        .catch(function(err) {
+          logsEl.textContent = 'Error loading logs: ' + err.message;
+          startLogStream(id);
+        });
+    }
+
+    function startLogStream(id) {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      var logsEl = document.getElementById('logs');
+
+      eventSource = new EventSource('/projects/' + id + '/logs/stream');
+      eventSource.onmessage = function(e) {
+        if (activeLogId !== id) return;
+        try {
+          var data = JSON.parse(e.data);
+          if (data.line) {
+            if (logsEl.textContent === 'No logs yet') logsEl.textContent = '';
+            var span = document.createElement('span');
+            span.textContent = data.line + '\n';
+            logsEl.appendChild(span);
+            while (logsEl.childNodes.length > 1000) logsEl.removeChild(logsEl.childNodes[0]);
+            logsEl.scrollTop = logsEl.scrollHeight;
+          }
+          if (data.closed) { eventSource.close(); eventSource = null; }
+        } catch (_) {}
+      };
+      eventSource.onerror = function() {
         eventSource.close();
         eventSource = null;
-        btn.textContent = 'Stream Live';
       };
     }
+
+    // Bind tab clicks
+    document.querySelectorAll('.logs-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        switchLogTab(parseInt(tab.getAttribute('data-log-id')));
+      });
+    });
+
+    // Auto-stream main tab on load
+    activeLogId = projectId;
+    startLogStream(projectId);
 
     function toggleSettings() {
       var panel = document.getElementById('settings-panel');
@@ -376,116 +389,6 @@
       .catch(function() {});
     <% } %>
 
-    // Worktree inline logs
-    (function() {
-      var wtStreams = {};
-
-      function createWtLogger(wtId) {
-        var row = document.getElementById('wt-logs-row-' + wtId);
-        var output = document.getElementById('wt-log-output-' + wtId);
-        var MAX_LINES = 1000;
-        var es = null;
-        var historyLoaded = false;
-        var userScrolled = false;
-
-        function isNearBottom() {
-          return output.scrollHeight - output.scrollTop - output.clientHeight < 50;
-        }
-
-        function scrollToBottom() {
-          output.scrollTop = output.scrollHeight;
-        }
-
-        output.addEventListener('scroll', function() {
-          userScrolled = !isNearBottom();
-        });
-
-        function appendLine(text) {
-          if (output.textContent === 'No logs yet') output.textContent = '';
-          var line = document.createElement('span');
-          line.textContent = text + '\n';
-          output.appendChild(line);
-          while (output.childNodes.length > MAX_LINES) {
-            output.removeChild(output.childNodes[0]);
-          }
-          if (!userScrolled) scrollToBottom();
-        }
-
-        function startStream() {
-          if (es) return;
-          es = new EventSource('/projects/' + wtId + '/logs/stream');
-          es.onmessage = function(e) {
-            try {
-              var data = JSON.parse(e.data);
-              if (data.line) appendLine(data.line);
-              if (data.closed) { es.close(); es = null; }
-            } catch (_) {
-              appendLine(e.data);
-            }
-          };
-          es.onerror = function() {
-            appendLine('[Connection lost, retrying...]');
-          };
-        }
-
-        function stopStream() {
-          if (es) { es.close(); es = null; }
-        }
-
-        return {
-          open: function() {
-            row.classList.remove('hidden');
-            if (!historyLoaded) {
-              historyLoaded = true;
-              output.textContent = 'Loading logs...';
-              fetch('/projects/' + wtId + '/logs?lines=200')
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                  output.textContent = '';
-                  if (data.lines && data.lines.length > 0) {
-                    data.lines.forEach(function(l) {
-                      var span = document.createElement('span');
-                      span.textContent = l + '\n';
-                      output.appendChild(span);
-                    });
-                    scrollToBottom();
-                  } else {
-                    output.textContent = 'No logs yet';
-                  }
-                  startStream();
-                })
-                .catch(function(err) {
-                  output.textContent = 'Error loading logs: ' + err.message;
-                  startStream();
-                });
-            } else {
-              startStream();
-              if (!userScrolled) scrollToBottom();
-            }
-          },
-          close: function() {
-            row.classList.add('hidden');
-            stopStream();
-          },
-          isOpen: function() { return !row.classList.contains('hidden'); }
-        };
-      }
-
-      document.querySelectorAll('.wt-logs-toggle').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var wtId = btn.getAttribute('data-wt-id');
-          if (!wtStreams[wtId]) wtStreams[wtId] = createWtLogger(wtId);
-          var logger = wtStreams[wtId];
-          if (logger.isOpen()) {
-            logger.close();
-            btn.textContent = 'logs';
-          } else {
-            logger.open();
-            btn.textContent = 'hide';
-          }
-        });
-      });
-    })();
   </script>
 </body>
 </html>
