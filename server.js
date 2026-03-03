@@ -89,7 +89,7 @@ app.get('/', async (req, res) => {
       (projects || []).map(async (project) => {
         const status = await docker.getStatus(project);
         const port = status.running ? await docker.getPort(project) : null;
-        const health = docker.getHealth(project.id);
+        const health = docker.getHealthWithProbe(project, status);
         return { ...project, status: status.running ? 'running' : 'stopped', port, health };
       })
     );
@@ -157,7 +157,7 @@ app.get('/projects/:id', (req, res) => {
 
     const status = await docker.getStatus(project);
     const port = status.running ? await docker.getPort(project) : null;
-    const health = docker.getHealth(project.id);
+    const health = docker.getHealthWithProbe(project, status);
     const logs = await docker.getLogs(project, 200);
 
     db.getWorktreesForProject(id, async (err, worktrees) => {
@@ -166,7 +166,7 @@ app.get('/projects/:id', (req, res) => {
         (worktrees || []).map(async (wt) => {
           const wtStatus = await docker.getStatus(wt);
           const wtPort = wtStatus.running ? await docker.getPort(wt) : null;
-          const wtHealth = docker.getHealth(wt.id);
+          const wtHealth = docker.getHealthWithProbe(wt, wtStatus);
           return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort, health: wtHealth };
         })
       );
@@ -256,7 +256,7 @@ app.get('/api/projects', async (req, res) => {
       (projects || []).map(async (project) => {
         const status = await docker.getStatus(project);
         const port = status.running ? await docker.getPort(project) : null;
-        const health = docker.getHealth(project.id);
+        const health = docker.getHealthWithProbe(project, status);
         return { ...project, status: status.running ? 'running' : 'stopped', port, health };
       })
     );
@@ -274,7 +274,7 @@ app.get('/api/projects/:id', (req, res) => {
 
     const status = await docker.getStatus(project);
     const port = status.running ? await docker.getPort(project) : null;
-    const health = docker.getHealth(project.id);
+    const health = docker.getHealthWithProbe(project, status);
     res.json({ ...project, status: status.running ? 'running' : 'stopped', port, health });
   });
 });
