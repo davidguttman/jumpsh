@@ -286,7 +286,7 @@ app.post('/projects/:id/start', (req, res) => {
         }
       });
     } else {
-      res.status(500).json({ error: result.error });
+      res.status(500).json({ error: result.error, buildLog: result.buildLog || null });
     }
   });
 });
@@ -380,6 +380,24 @@ app.get('/projects/:id/startup', (req, res) => {
     });
 
     req.on('close', unsubscribe);
+  });
+});
+
+// Build log (saved from last failed build)
+app.get('/api/projects/:id/build-log', (req, res) => {
+  const { id } = req.params;
+
+  db.getProject(id, (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const buildLog = docker.getBuildLog(project);
+    if (buildLog) {
+      res.json({ buildLog });
+    } else {
+      res.json({ buildLog: null });
+    }
   });
 });
 

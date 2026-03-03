@@ -39,6 +39,27 @@ function getOverrides(project) {
   return Object.keys(o).length ? o : null;
 }
 
+function saveBuildLog(slug, content) {
+  try {
+    const dir = getJumpshDir(slug);
+    fs.mkdirSync(dir, { recursive: true });
+    const logPath = path.join(dir, 'build.log');
+    fs.writeFileSync(logPath, content);
+    return logPath;
+  } catch (err) {
+    console.error('Failed to save build log:', err.message);
+    return null;
+  }
+}
+
+function readBuildLog(slug) {
+  try {
+    const logPath = path.join(getJumpshDir(slug), 'build.log');
+    if (fs.existsSync(logPath)) return fs.readFileSync(logPath, 'utf8');
+  } catch {}
+  return null;
+}
+
 class DockerManager {
   constructor(db) {
     this.db = db;
@@ -97,6 +118,7 @@ class DockerManager {
 
       const processLine = (line) => {
         if (!line.trim()) return;
+        this._emitStartup(projectId, { buildLine: line });
         const newStep = this._detectStep(line, currentStep);
         if (newStep > currentStep) {
           currentStep = newStep;
@@ -293,16 +315,20 @@ class DockerManager {
           }
           return { success: true, status: retryStatus };
         } catch (retryError) {
+          const retryBuildOutput = [retryError.stdout, retryError.stderr].filter(Boolean).join('\n');
+          saveBuildLog(slug, retryBuildOutput);
           projectError(projectPath, 'Port conflict retry failed', { name, error: retryError.message });
           this.healthStates.set(id.toString(), 'unhealthy');
-          this._emitStartup(id, { error: `Port conflict retry failed: ${retryError.message}`, done: true });
-          return { success: false, error: `Port conflict retry failed: ${retryError.message}` };
+          this._emitStartup(id, { error: `Port conflict retry failed: ${retryError.message}`, buildLog: retryBuildOutput, done: true });
+          return { success: false, error: `Port conflict retry failed: ${retryError.message}`, buildLog: retryBuildOutput };
         }
       }
+      const buildOutput = [error.stdout, error.stderr].filter(Boolean).join('\n');
+      saveBuildLog(slug, buildOutput);
       projectError(projectPath, 'Container start failed', { name, error: error.message });
       this.healthStates.set(id.toString(), 'unhealthy');
-      this._emitStartup(id, { error: error.message, done: true });
-      return { success: false, error: error.message };
+      this._emitStartup(id, { error: error.message, buildLog: buildOutput, done: true });
+      return { success: false, error: error.message, buildLog: buildOutput };
     }
   }
 
@@ -513,6 +539,11 @@ class DockerManager {
 
       socket.connect(port, '127.0.0.1');
     });
+  }
+
+  getBuildLog(project) {
+    const slug = getProjectSlug(project);
+    return readBuildLog(slug);
   }
 
   getHealth(projectId) {
