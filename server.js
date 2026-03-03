@@ -497,6 +497,19 @@ async function shutdown(signal) {
 
   try {
     server.close();
+
+    // Stop all running Docker containers
+    const projects = await new Promise((resolve) => {
+      db.getAllProjectsIncludingWorktrees((err, rows) => resolve(rows || []));
+    });
+    for (const project of projects) {
+      const status = await docker.getStatus(project);
+      if (status.running) {
+        console.log(`Stopping container for ${project.name}...`);
+        await docker.stop(project);
+      }
+    }
+
     worktreeScanner.cleanup();
     remoteSyncer.stop();
     clearInterval(rotationTimer);
