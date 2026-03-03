@@ -383,8 +383,9 @@ main {
   padding: 0 2rem;
 }
 
-.add-browser-wide h2 {
-  margin-bottom: 1rem;
+.add-browser-wide #browser-section h2 {
+  margin: 0;
+  padding: 1rem 1rem 0;
 }
 
 .add-browser-wide #browser-section {
