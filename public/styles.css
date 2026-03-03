@@ -330,22 +330,26 @@ main {
   font-size: 0.75rem;
 }
 
-.branch-name {
-  font-family: var(--font-mono);
-  background: rgba(255, 255, 68, 0.1);
-  border: 1px solid var(--accent-gold);
-  padding: 0.1rem 0.4rem;
-  color: var(--accent-yellow);
-  font-size: 0.7rem;
-}
-
-.wt-url {
+.wt-branch-link,
+.wt-branch-name {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-}
-
-.wt-url.inactive {
   color: var(--text-muted);
+}
+
+.wt-branch-link {
+  color: var(--accent-cyan);
+  text-decoration: none;
+}
+
+.wt-branch-link:hover {
+  text-decoration: underline;
+}
+
+.btn-sm {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  margin-left: auto;
 }
 
 .status-dot {
