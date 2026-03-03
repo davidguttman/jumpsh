@@ -34,13 +34,43 @@ const certPath = resolvePath(
   process.env.JUMPSH_CERT_PATH || '~/.jump.sh/certs'
 );
 
+// Auto-detect domain from cert subdirectories (e.g. certs/dmg/ → dmg.jump.sh)
+function detectDomainFromCerts() {
+  try {
+    const entries = fs.readdirSync(certPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const subdir = path.join(certPath, entry.name);
+      if (fs.existsSync(path.join(subdir, 'server-key.pem')) &&
+          fs.existsSync(path.join(subdir, 'server.pem'))) {
+        return `${entry.name}.jump.sh`;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Detect domain from Host header (strip dashboard prefix)
+function detectDomainFromHost(hostname) {
+  const host = hostname.replace(/:\d+$/, '');
+  for (const prefix of ['dash.', 'dashboard.']) {
+    if (host.startsWith(prefix)) {
+      return host.slice(prefix.length);
+    }
+  }
+  return null;
+}
+
+// Priority: CLI flag (via env) > Cert detection > Env var default > 'jump.sh'
+const domain = process.env.JUMPSH_DOMAIN || detectDomainFromCerts() || 'jump.sh';
+
 // Config
 const config = {
   port: parseInt(process.env.JUMPSH_PORT, 10) || 4443,
-  domain: process.env.JUMPSH_DOMAIN || 'jump.sh',
+  domain,
   https: process.env.JUMPSH_HTTPS !== 'false',
   certPath,
-  dashboardHost: process.env.JUMPSH_DASHBOARD_HOST || `dash.${process.env.JUMPSH_DOMAIN || 'jump.sh'}`
+  dashboardHost: process.env.JUMPSH_DASHBOARD_HOST || `dash.${domain}`
 };
 
 /**
@@ -75,6 +105,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Per-request domain detection from Host header
+app.use((req, res, next) => {
+  const detected = detectDomainFromHost(req.get('host') || '');
+  if (detected && detected !== config.domain) {
+    req.requestConfig = { ...config, domain: detected, dashboardHost: `dash.${detected}` };
+    req.requestConfig.formatUrl = formatUrl;
+  } else {
+    req.requestConfig = config;
+  }
+  next();
+});
+
 // ============ Routes ============
 
 // Dashboard
@@ -105,10 +147,10 @@ app.get('/', async (req, res) => {
       worktreesByParent[p.parent_project_id].push(p);
     }
 
-    res.render('index', { 
-      projects: mainProjects, 
+    res.render('index', {
+      projects: mainProjects,
       worktreesByParent,
-      config 
+      config: req.requestConfig
     });
   });
 });
@@ -116,7 +158,7 @@ app.get('/', async (req, res) => {
 // Add project form
 app.get('/add', (req, res) => {
   const folderOptions = listProjectFolders();
-  res.render('add', { config, folderOptions });
+  res.render('add', { config: req.requestConfig, folderOptions });
 });
 
 // Create project
@@ -178,7 +220,7 @@ app.get('/projects/:id', (req, res) => {
         project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
         worktrees: worktreesWithStatus,
         logs,
-        config
+        config: req.requestConfig
       });
     });
   });
