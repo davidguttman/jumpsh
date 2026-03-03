@@ -57,7 +57,7 @@ config.formatUrl = formatUrl;
 // Initialize services
 const db = new Database();
 const docker = new DockerManager(db);
-const worktreeScanner = new WorktreeScanner(db);
+const worktreeScanner = new WorktreeScanner(db, docker);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
 const remoteSyncer = new RemoteSyncer();
 subdomainProxy.setRemoteSyncer(remoteSyncer);
@@ -197,6 +197,14 @@ app.post('/projects/:id/start', (req, res) => {
       const status = await docker.getStatus(project);
       const health = docker.getHealthWithProbe(project, status);
       res.json({ success: true, status: result.status, health });
+
+      // Auto-start worktrees (fire-and-forget)
+      db.getWorktreesForProject(id, (err, worktrees) => {
+        if (err || !worktrees) return;
+        for (const wt of worktrees) {
+          docker.start(wt);
+        }
+      });
     } else {
       res.status(500).json({ error: result.error });
     }

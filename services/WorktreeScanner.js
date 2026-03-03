@@ -7,8 +7,9 @@ import slugify from 'slugify';
 const execAsync = promisify(exec);
 
 class WorktreeScanner {
-  constructor(db) {
+  constructor(db, docker) {
     this.db = db;
+    this.docker = docker;
     this.watchers = new Map(); // projectId -> FSWatcher
   }
 
@@ -101,14 +102,25 @@ class WorktreeScanner {
       });
     }
 
-    // Remove worktrees that no longer exist
-    this.db.getWorktreesForProject(project.id, (err, dbWorktrees) => {
+    // Remove worktrees that no longer exist, and auto-start if parent is running
+    this.db.getWorktreesForProject(project.id, async (err, dbWorktrees) => {
       if (err || !dbWorktrees) return;
-      
+
       const currentPaths = new Set(worktrees.map(w => w.path));
       for (const dbWt of dbWorktrees) {
         if (!currentPaths.has(dbWt.path)) {
           this.db.deleteWorktree(dbWt.path, () => {});
+        }
+      }
+
+      // Auto-start worktrees if parent project is running
+      if (this.docker) {
+        const parentStatus = await this.docker.getStatus(project);
+        if (parentStatus.running) {
+          const activeWorktrees = dbWorktrees.filter(wt => currentPaths.has(wt.path));
+          for (const wt of activeWorktrees) {
+            this.docker.start(wt); // fire-and-forget
+          }
         }
       }
     });
