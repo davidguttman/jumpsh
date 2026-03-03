@@ -43,8 +43,11 @@ function detectDomainFromCerts() {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const subdir = path.join(certPath, entry.name);
-      if (fs.existsSync(path.join(subdir, 'server-key.pem')) &&
-          fs.existsSync(path.join(subdir, 'server.pem'))) {
+      const hasLegacy = fs.existsSync(path.join(subdir, 'server-key.pem')) &&
+                        fs.existsSync(path.join(subdir, 'server.pem'));
+      const hasNew = fs.existsSync(path.join(subdir, 'privkey.pem')) &&
+                     fs.existsSync(path.join(subdir, 'fullchain.pem'));
+      if (hasLegacy || hasNew) {
         return `${entry.name}.jump.sh`;
       }
     }
@@ -625,14 +628,21 @@ if (config.https && !certsExist()) {
 // ============ TLS / SNI Setup ============
 
 function loadCertPair(dir, label) {
-  const keyFile = path.join(dir, 'server-key.pem');
-  const certFile = path.join(dir, 'server.pem');
-  if (!fs.existsSync(keyFile) || !fs.existsSync(certFile)) {
-    console.warn(`[SNI] ${label} certs not found in ${dir}, skipping`);
-    return null;
+  // Try legacy naming first, then new naming from register flow
+  const pairs = [
+    { key: 'server-key.pem', cert: 'server.pem' },
+    { key: 'privkey.pem', cert: 'fullchain.pem' },
+  ];
+  for (const { key, cert } of pairs) {
+    const keyFile = path.join(dir, key);
+    const certFile = path.join(dir, cert);
+    if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
+      console.log(`[SNI] Loaded ${label} certs from ${dir} (${cert})`);
+      return { key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile) };
+    }
   }
-  console.log(`[SNI] Loaded ${label} certs from ${dir}`);
-  return { key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile) };
+  console.warn(`[SNI] ${label} certs not found in ${dir}, skipping`);
+  return null;
 }
 
 let server;
@@ -640,11 +650,23 @@ if (config.https) {
   // Default cert (*.jump.sh)
   const defaultCert = loadCertPair(config.certPath, 'default (*.jump.sh)');
 
-  // Secondary cert (*.dmg.jump.sh)
-  const dmgCertDir = path.join(config.certPath, 'dmg');
-  const dmgCert = loadCertPair(dmgCertDir, '*.dmg.jump.sh');
+  // Load certs from all subdirectories (e.g. certs/dmg/, certs/davidguttman/)
+  const sniContexts = {};
+  let firstSubCert = null;
+  try {
+    const entries = fs.readdirSync(config.certPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const subdir = path.join(config.certPath, entry.name);
+      const pair = loadCertPair(subdir, `*.${entry.name}.jump.sh`);
+      if (pair) {
+        sniContexts[entry.name] = tls.createSecureContext(pair);
+        if (!firstSubCert) firstSubCert = pair;
+      }
+    }
+  } catch {}
 
-  if (!defaultCert && !dmgCert) {
+  if (!defaultCert && !firstSubCert) {
     console.warn(
       `JUMPSH_HTTPS=true but no certs found.\n` +
       `Place cert files (server.pem and server-key.pem) in ${config.certPath}.\n` +
@@ -653,22 +675,16 @@ if (config.https) {
     config.https = false;
     server = http.createServer(app);
   } else {
-    // Use whichever cert is available as the default
-    const primary = defaultCert || dmgCert;
-
-    // Build SNI context map
-    const sniContexts = {};
-    if (dmgCert) {
-      sniContexts['dmg'] = tls.createSecureContext(dmgCert);
-    }
+    const primary = defaultCert || firstSubCert;
 
     const httpsOptions = {
       ...primary,
       SNICallback: (hostname, cb) => {
-        // Match *.dmg.jump.sh hostnames
-        if (hostname.endsWith('.dmg.jump.sh') || hostname === 'dmg.jump.sh') {
-          const ctx = sniContexts['dmg'];
-          if (ctx) return cb(null, ctx);
+        // Match *.{name}.jump.sh for each loaded subdirectory cert
+        for (const name of Object.keys(sniContexts)) {
+          if (hostname.endsWith(`.${name}.jump.sh`) || hostname === `${name}.jump.sh`) {
+            return cb(null, sniContexts[name]);
+          }
         }
         // Fall through to default cert
         cb(null);
