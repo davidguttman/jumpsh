@@ -229,6 +229,22 @@ app.post('/projects/:id/stop', (req, res) => {
   });
 });
 
+// Get log history (JSON)
+app.get('/projects/:id/logs', (req, res) => {
+  const { id } = req.params;
+  const lines = parseInt(req.query.lines) || 200;
+
+  db.getProject(id, async (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const logs = await docker.getLogs(project, lines);
+    const logLines = logs ? logs.split('\n').filter(l => l.trim()) : [];
+    res.json({ lines: logLines });
+  });
+});
+
 // Stream logs (SSE)
 app.get('/projects/:id/logs/stream', (req, res) => {
   const { id } = req.params;

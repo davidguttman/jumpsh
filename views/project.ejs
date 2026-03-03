@@ -66,6 +66,7 @@
                 <th>URL</th>
                 <th>Status</th>
                 <th>Actions</th>
+                <th>Logs</th>
               </tr>
             </thead>
             <tbody>
@@ -94,6 +95,14 @@
                     <% } else { %>
                       <button class="btn btn-sm btn-success" onclick="startProject(<%= wt.id %>)">Start</button>
                     <% } %>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm wt-logs-toggle" data-wt-id="<%= wt.id %>">logs</button>
+                  </td>
+                </tr>
+                <tr class="wt-logs-row" id="wt-logs-row-<%= wt.id %>" style="display: none;">
+                  <td colspan="5" style="padding: 0;">
+                    <pre class="wt-logs-output" id="wt-log-output-<%= wt.id %>" style="max-height: 300px; overflow-y: auto; margin: 0; padding: 0.5rem; background: #1a1a1a; color: #ccc; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word;">No logs yet</pre>
                   </td>
                 </tr>
               <% } %>
@@ -205,6 +214,117 @@
     <% if (health === 'starting') { %>
     pollHealth(projectId);
     <% } %>
+
+    // Worktree inline logs
+    (function() {
+      var wtStreams = {};
+
+      function createWtLogger(wtId) {
+        var row = document.getElementById('wt-logs-row-' + wtId);
+        var output = document.getElementById('wt-log-output-' + wtId);
+        var MAX_LINES = 1000;
+        var es = null;
+        var historyLoaded = false;
+        var userScrolled = false;
+
+        function isNearBottom() {
+          return output.scrollHeight - output.scrollTop - output.clientHeight < 50;
+        }
+
+        function scrollToBottom() {
+          output.scrollTop = output.scrollHeight;
+        }
+
+        output.addEventListener('scroll', function() {
+          userScrolled = !isNearBottom();
+        });
+
+        function appendLine(text) {
+          if (output.textContent === 'No logs yet') output.textContent = '';
+          var line = document.createElement('span');
+          line.textContent = text + '\n';
+          output.appendChild(line);
+          while (output.childNodes.length > MAX_LINES) {
+            output.removeChild(output.childNodes[0]);
+          }
+          if (!userScrolled) scrollToBottom();
+        }
+
+        function startStream() {
+          if (es) return;
+          es = new EventSource('/projects/' + wtId + '/logs/stream');
+          es.onmessage = function(e) {
+            try {
+              var data = JSON.parse(e.data);
+              if (data.line) appendLine(data.line);
+              if (data.closed) { es.close(); es = null; }
+            } catch (_) {
+              appendLine(e.data);
+            }
+          };
+          es.onerror = function() {
+            appendLine('[Connection lost, retrying...]');
+          };
+        }
+
+        function stopStream() {
+          if (es) { es.close(); es = null; }
+        }
+
+        return {
+          open: function() {
+            row.style.display = '';
+            if (!historyLoaded) {
+              historyLoaded = true;
+              output.textContent = 'Loading logs...';
+              fetch('/projects/' + wtId + '/logs?lines=200')
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                  output.textContent = '';
+                  if (data.lines && data.lines.length > 0) {
+                    data.lines.forEach(function(l) {
+                      var span = document.createElement('span');
+                      span.textContent = l + '\n';
+                      output.appendChild(span);
+                    });
+                    scrollToBottom();
+                  } else {
+                    output.textContent = 'No logs yet';
+                  }
+                  startStream();
+                })
+                .catch(function(err) {
+                  output.textContent = 'Error loading logs: ' + err.message;
+                  startStream();
+                });
+            } else {
+              startStream();
+              if (!userScrolled) scrollToBottom();
+            }
+          },
+          close: function() {
+            row.style.display = 'none';
+            stopStream();
+          },
+          isOpen: function() { return row.style.display !== 'none'; }
+        };
+      }
+
+      document.querySelectorAll('.wt-logs-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var wtId = btn.getAttribute('data-wt-id');
+          if (!wtStreams[wtId]) wtStreams[wtId] = createWtLogger(wtId);
+          var logger = wtStreams[wtId];
+          if (logger.isOpen()) {
+            logger.close();
+            btn.textContent = 'logs';
+          } else {
+            logger.open();
+            btn.textContent = 'hide';
+          }
+        });
+      });
+    })();
   </script>
 </body>
 </html>
