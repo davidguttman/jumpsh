@@ -452,8 +452,10 @@ main {
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  background: rgba(24, 28, 36, 0.85);
-  border: 3px solid var(--border-outer);
+  background: var(--panel-bg);
+  border: 24px solid;
+  border-image: url('/assets/borders/plain.gif') 32 round;
+  border-radius: 36px;
 }
 
 .empty-state h2 {
