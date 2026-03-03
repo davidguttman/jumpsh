@@ -12,12 +12,11 @@
   </header>
 
   <main>
-    <div class="form-container">
-      <h2>Add Project</h2>
+    <form action="/projects" method="POST">
+      <input type="hidden" id="path" name="path" required>
 
-      <form action="/projects" method="POST">
-        <input type="hidden" id="path" name="path" required>
-
+      <div class="add-browser-wide">
+        <h2>Add Project</h2>
         <div id="browser-section">
           <div class="folder-path-bar" id="path-bar">/</div>
           <div class="column-browser" id="column-browser"></div>
@@ -25,8 +24,9 @@
             <button type="button" class="btn" id="modal-select">select this folder</button>
           </div>
         </div>
+      </div>
 
-        <div id="fields-section" style="display: none;">
+      <div class="form-container" id="fields-section" style="display: none;">
           <div id="detection-loading" class="detection-loading" style="display: none;">detecting...</div>
           <div id="detection-error" class="detection-error" style="display: none;"></div>
 
@@ -65,8 +65,7 @@
             <a href="/" class="btn">Cancel</a>
             <button type="submit" class="btn btn-primary">Add Project</button>
           </div>
-        </div>
-      </form>
+      </div>
 
       <script>
         var pathInput = document.getElementById('path');
@@ -151,7 +150,7 @@
           if (dockerImageInput.value === detectedDefaults.dockerImage) dockerImageInput.value = '';
         });
       </script>
-    </div>
+    </form>
   </main>
 
   <script>
