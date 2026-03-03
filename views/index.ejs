@@ -152,6 +152,22 @@
 
     // Auto-refresh every 30 seconds
     setTimeout(() => location.reload(), 30000);
+
+    // Auto-poll all projects with health='starting' on page load
+    <% for (const project of projects) { %>
+      <% if (project.health === 'starting') { %>
+    pollHealth('<%= project.id %>');
+      <% } %>
+    <% } %>
+
+    // Auto-poll all worktrees with health='starting' on page load
+    <% for (const wts of Object.values(worktreesByParent)) { %>
+      <% for (const wt of wts) { %>
+        <% if (wt.health === 'starting') { %>
+    pollHealth('<%= wt.id %>');
+        <% } %>
+      <% } %>
+    <% } %>
   </script>
 </body>
 </html>
