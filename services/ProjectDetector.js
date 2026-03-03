@@ -36,6 +36,10 @@ export function detectProjectType(projectPath) {
     return { type: 'go', framework: null, devCommand: 'go run .', port: 8080, dockerImage: 'golang:1.22-alpine' };
   }
 
+  // Fallback: static site (index.html with no recognizable project markers)
+  const staticResult = detectStatic(projectPath);
+  if (staticResult) return staticResult;
+
   return { error: 'Could not detect project type. Add a docker-compose.yml manually.' };
 }
 
@@ -263,6 +267,28 @@ function findGenericPythonEntrypoint(projectPath) {
     if (fs.existsSync(path.join(projectPath, file))) return file;
   }
   return null;
+}
+
+// ---- Static site detection ----
+
+const PROJECT_MARKERS = [
+  'package.json',
+  'requirements.txt',
+  'pyproject.toml',
+  'go.mod',
+  'Gemfile',
+  'Cargo.toml',
+  'composer.json',
+  'pom.xml',
+  'build.gradle',
+];
+
+function detectStatic(projectPath) {
+  if (!fs.existsSync(path.join(projectPath, 'index.html'))) return null;
+  for (const marker of PROJECT_MARKERS) {
+    if (fs.existsSync(path.join(projectPath, marker))) return null;
+  }
+  return { type: 'static', framework: null, devCommand: null, port: 80, dockerImage: 'nginx:alpine' };
 }
 
 export default { detectProjectType };
