@@ -130,12 +130,14 @@ class WorktreeScanner {
 
   // Scan all projects
   scanAllProjects() {
-    this.db.getAllProjects((err, projects) => {
-      if (err || !projects) return;
-      
-      for (const project of projects) {
-        this.watchProject(project);
-      }
+    this.db.ready().then(() => {
+      this.db.getAllProjects((err, projects) => {
+        if (err || !projects) return;
+        
+        for (const project of projects) {
+          this.watchProject(project);
+        }
+      });
     });
   }
 

@@ -1,130 +1,83 @@
-import sqlite3 from 'sqlite3';
+import { JSONFilePreset } from 'lowdb/node';
 import getPort from 'get-port';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(os.homedir(), '.jump.sh');
+const DB_PATH = path.join(DATA_DIR, 'projects.json');
+
+const DEFAULT_DATA = { nextId: 1, projects: [] };
 
 class Database {
   constructor() {
-    const dataDir = path.join(os.homedir(), '.jump.sh');
-    fs.mkdirSync(dataDir, { recursive: true });
-    const dbPath = path.join(dataDir, 'projects.db');
-
-    this._ready = new Promise((resolve, reject) => {
-      this.db = new (sqlite3.verbose().Database)(dbPath, (err) => {
-        if (err) {
-          console.error('Error opening database:', err.message);
-          return reject(err);
-        }
-        this.db.run('PRAGMA journal_mode=WAL', () => {
-          this.init(() => resolve());
-        });
-      });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    this._ready = JSONFilePreset(DB_PATH, DEFAULT_DATA).then(db => {
+      this.db = db;
     });
   }
 
-  /** Wait for the database to be fully initialized. */
   ready() {
     return this._ready;
   }
 
-  init(done) {
-    // Projects table - minimal, Docker is source of truth for status
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        path TEXT NOT NULL,
-        subdomain TEXT UNIQUE,
-        description TEXT,
-        parent_project_id INTEGER REFERENCES projects(id),
-        is_worktree BOOLEAN DEFAULT 0,
-        branch_name TEXT,
-        assigned_port INTEGER,
-        override_build_command TEXT,
-        override_start_command TEXT,
-        override_port INTEGER,
-        override_docker_image TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `, () => {
-      // Migration: add assigned_port if table already exists without it
-      this.db.run('ALTER TABLE projects ADD COLUMN assigned_port INTEGER', () => {
-        // Silently ignore "duplicate column" error
-        // Migration: add command override columns
-        this.db.run('ALTER TABLE projects ADD COLUMN override_build_command TEXT', () => {
-          this.db.run('ALTER TABLE projects ADD COLUMN override_start_command TEXT', () => {
-            this.db.run('ALTER TABLE projects ADD COLUMN override_port INTEGER', () => {
-              this.db.run('ALTER TABLE projects ADD COLUMN override_docker_image TEXT', () => {
-                done();
-              });
-            });
-          });
-        });
-      });
-    });
+  _write() {
+    return this.db.write();
   }
 
-  // Port allocation: prefer deterministic range starting at 10000,
-  // exclude DB-assigned ports, let get-port verify host availability.
-  // When primary range is exhausted, extends to overflow range with a notice.
+  // Port allocation
   static PORT_RANGE_START = 10000;
   static PORT_RANGE_END = 10999;
   static PORT_OVERFLOW_END = 11999;
 
   getNextPort(callback) {
-    this.db.all(
-      'SELECT assigned_port FROM projects WHERE assigned_port IS NOT NULL ORDER BY assigned_port',
-      async (err, rows) => {
-        if (err) return callback(err);
+    try {
+      const usedPorts = new Set(
+        this.db.data.projects
+          .filter(p => p.assigned_port != null)
+          .map(p => p.assigned_port)
+      );
+      const exclude = new Set(usedPorts);
 
-        const usedPorts = new Set((rows || []).map(r => r.assigned_port));
-        const exclude = new Set(usedPorts);
+      let candidates = Database.makePortRange(usedPorts, Database.PORT_RANGE_START, Database.PORT_RANGE_END);
+      let extended = false;
 
-        try {
-          let candidates = this.constructor.makePortRange(usedPorts, Database.PORT_RANGE_START, Database.PORT_RANGE_END);
-          let extended = false;
-
-          if (candidates.length === 0) {
-            candidates = this.constructor.makePortRange(usedPorts, Database.PORT_RANGE_END + 1, Database.PORT_OVERFLOW_END);
-            extended = true;
-            if (candidates.length === 0) {
-              return callback(new Error(
-                `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
-              ));
-            }
-          }
-
-          const port = await getPort({ port: candidates, exclude });
-          if (port < Database.PORT_RANGE_START || port > Database.PORT_OVERFLOW_END) {
-            return callback(new Error(
-              `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
-            ));
-          }
-
-          if (extended) {
-            console.log(`Notice: Primary port range (10000-10999) exhausted, using overflow range (11000-11999).`);
-          }
-
-          callback(null, port);
-        } catch (e) {
-          callback(e);
+      if (candidates.length === 0) {
+        candidates = Database.makePortRange(usedPorts, Database.PORT_RANGE_END + 1, Database.PORT_OVERFLOW_END);
+        extended = true;
+        if (candidates.length === 0) {
+          return callback(new Error(
+            `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
+          ));
         }
       }
-    );
+
+      getPort({ port: candidates, exclude }).then(port => {
+        if (port < Database.PORT_RANGE_START || port > Database.PORT_OVERFLOW_END) {
+          return callback(new Error(
+            `No free port in range ${Database.PORT_RANGE_START}-${Database.PORT_OVERFLOW_END}`
+          ));
+        }
+        if (extended) {
+          console.log('Notice: Primary port range (10000-10999) exhausted, using overflow range (11000-11999).');
+        }
+        callback(null, port);
+      }).catch(e => callback(e));
+    } catch (e) {
+      callback(e);
+    }
   }
 
-  /** Release a project's assigned port back to the pool. */
   releasePort(projectId, callback) {
-    this.db.run('UPDATE projects SET assigned_port = NULL WHERE id = ?', [projectId], callback);
+    const project = this.db.data.projects.find(p => p.id === projectId);
+    if (project) {
+      project.assigned_port = null;
+      this._write().then(() => callback(null)).catch(callback);
+    } else {
+      callback(null);
+    }
   }
 
-  // Generate candidate ports within a given range, skipping used ports
   static makePortRange(usedPorts, start, end) {
     const candidates = [];
     for (let p = start; p <= end && candidates.length < 100; p++) {
@@ -135,31 +88,48 @@ class Database {
 
   // Project CRUD
   createProject(project, callback) {
-    const { name, path, subdomain, description, parent_project_id, is_worktree, branch_name, override_build_command, override_start_command, override_port, override_docker_image } = project;
-    this.db.run(
-      `INSERT INTO projects (name, path, subdomain, description, parent_project_id, is_worktree, branch_name, override_build_command, override_start_command, override_port, override_docker_image)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, path, subdomain || name.toLowerCase().replace(/[^a-z0-9]/g, '-'), description, parent_project_id, is_worktree ? 1 : 0, branch_name, override_build_command || null, override_start_command || null, override_port || null, override_docker_image || null],
-      function(err) {
-        callback(err, this?.lastID);
-      }
-    );
+    const now = new Date().toISOString();
+    const id = this.db.data.nextId++;
+    const record = {
+      id,
+      name: project.name,
+      path: project.path,
+      subdomain: project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+      description: project.description || null,
+      parent_project_id: project.parent_project_id || null,
+      is_worktree: project.is_worktree ? 1 : 0,
+      branch_name: project.branch_name || null,
+      assigned_port: null,
+      override_build_command: project.override_build_command || null,
+      override_start_command: project.override_start_command || null,
+      override_port: project.override_port || null,
+      override_docker_image: project.override_docker_image || null,
+      created_at: now,
+      updated_at: now,
+    };
+    this.db.data.projects.push(record);
+    this._write().then(() => callback(null, id)).catch(callback);
   }
 
   getProject(id, callback) {
-    this.db.get('SELECT * FROM projects WHERE id = ?', [id], callback);
+    const project = this.db.data.projects.find(p => p.id === id) || null;
+    callback(null, project);
   }
 
   getProjectBySubdomain(subdomain, callback) {
-    this.db.get('SELECT * FROM projects WHERE subdomain = ?', [subdomain.toLowerCase()], callback);
+    const s = subdomain.toLowerCase();
+    const project = this.db.data.projects.find(p => p.subdomain === s) || null;
+    callback(null, project);
   }
 
   getProjectByName(name, callback) {
-    this.db.get('SELECT * FROM projects WHERE name = ? AND is_worktree = 0', [name], callback);
+    const project = this.db.data.projects.find(p => p.name === name && !p.is_worktree) || null;
+    callback(null, project);
   }
 
   getProjectByPath(projectPath, callback) {
-    this.db.get('SELECT * FROM projects WHERE path = ?', [projectPath], callback);
+    const project = this.db.data.projects.find(p => p.path === projectPath) || null;
+    callback(null, project);
   }
 
   findProject(nameOrSubdomain, callback) {
@@ -171,64 +141,86 @@ class Database {
   }
 
   getAllProjects(callback) {
-    this.db.all('SELECT * FROM projects WHERE is_worktree = 0 ORDER BY name', callback);
+    const projects = this.db.data.projects
+      .filter(p => !p.is_worktree)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    callback(null, projects);
   }
 
   getAllProjectsIncludingWorktrees(callback) {
-    this.db.all('SELECT * FROM projects ORDER BY parent_project_id NULLS FIRST, name', callback);
+    const projects = [...this.db.data.projects].sort((a, b) => {
+      const aParent = a.parent_project_id ?? -Infinity;
+      const bParent = b.parent_project_id ?? -Infinity;
+      if (aParent !== bParent) return aParent - bParent;
+      return a.name.localeCompare(b.name);
+    });
+    callback(null, projects);
   }
 
   getWorktreesForProject(projectId, callback) {
-    this.db.all('SELECT * FROM projects WHERE parent_project_id = ? ORDER BY name', [projectId], callback);
+    const worktrees = this.db.data.projects
+      .filter(p => p.parent_project_id === projectId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    callback(null, worktrees);
   }
 
   updateProject(id, updates, callback) {
-    const fields = [];
-    const values = [];
-    for (const [key, value] of Object.entries(updates)) {
-      fields.push(`${key} = ?`);
-      values.push(value);
-    }
-    fields.push('updated_at = CURRENT_TIMESTAMP');
-    values.push(id);
-    
-    this.db.run(
-      `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`,
-      values,
-      callback
-    );
+    const project = this.db.data.projects.find(p => p.id === id);
+    if (!project) return callback(null);
+    Object.assign(project, updates, { updated_at: new Date().toISOString() });
+    this._write().then(() => callback(null)).catch(callback);
   }
 
   deleteProject(id, callback) {
-    // Delete worktrees first
-    this.db.run('DELETE FROM projects WHERE parent_project_id = ?', [id], (err) => {
-      if (err) return callback(err);
-      this.db.run('DELETE FROM projects WHERE id = ?', [id], callback);
-    });
+    // Delete worktrees first, then the project
+    this.db.data.projects = this.db.data.projects.filter(
+      p => p.parent_project_id !== id && p.id !== id
+    );
+    this._write().then(() => callback(null)).catch(callback);
   }
 
   // Worktree management
   upsertWorktree(worktree, callback) {
     const { name, path, subdomain, parent_project_id, branch_name } = worktree;
-    this.db.run(
-      `INSERT INTO projects (name, path, subdomain, parent_project_id, is_worktree, branch_name)
-       VALUES (?, ?, ?, ?, 1, ?)
-       ON CONFLICT(name) DO UPDATE SET
-         path = excluded.path,
-         subdomain = excluded.subdomain,
-         branch_name = excluded.branch_name,
-         updated_at = CURRENT_TIMESTAMP`,
-      [name, path, subdomain, parent_project_id, branch_name],
-      callback
-    );
+    const existing = this.db.data.projects.find(p => p.name === name);
+    if (existing) {
+      existing.path = path;
+      existing.subdomain = subdomain;
+      existing.branch_name = branch_name;
+      existing.updated_at = new Date().toISOString();
+    } else {
+      const now = new Date().toISOString();
+      const id = this.db.data.nextId++;
+      this.db.data.projects.push({
+        id,
+        name,
+        path,
+        subdomain,
+        description: null,
+        parent_project_id,
+        is_worktree: 1,
+        branch_name,
+        assigned_port: null,
+        override_build_command: null,
+        override_start_command: null,
+        override_port: null,
+        override_docker_image: null,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+    this._write().then(() => callback(null)).catch(callback);
   }
 
   deleteWorktree(path, callback) {
-    this.db.run('DELETE FROM projects WHERE path = ? AND is_worktree = 1', [path], callback);
+    this.db.data.projects = this.db.data.projects.filter(
+      p => !(p.path === path && p.is_worktree)
+    );
+    this._write().then(() => callback(null)).catch(callback);
   }
 
   close(callback) {
-    this.db.close(callback || (() => {}));
+    if (callback) callback();
   }
 }
 
