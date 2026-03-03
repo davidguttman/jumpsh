@@ -438,6 +438,35 @@ app.get('/api/projects', async (req, res) => {
   });
 });
 
+// ============ Detect Project Type API ============
+
+app.get('/api/detect', (req, res) => {
+  var projectPath = req.query.path;
+  if (!projectPath) {
+    return res.status(400).json({ error: 'path query parameter is required' });
+  }
+
+  var resolved = path.resolve(projectPath);
+  try {
+    var stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: 'Path is not a directory' });
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+
+  try {
+    var detection = detectProjectType(resolved);
+    res.json(detection);
+  } catch (err) {
+    res.status(500).json({ error: 'Detection failed: ' + err.message });
+  }
+});
+
 // ============ Browse Folders API ============
 
 app.get('/api/browse', (req, res) => {

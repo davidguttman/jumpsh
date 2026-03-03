@@ -36,6 +36,34 @@
           <small>Will be used for subdomain: <span id="subdomain-preview">my-app</span>.<%= config.domain %></small>
         </div>
 
+        <div id="detection-preview" class="detection-preview" style="display: none;">
+          <h3 class="detection-title">Detection Preview</h3>
+          <div id="detection-loading" class="detection-loading" style="display: none;">detecting...</div>
+          <div id="detection-error" class="detection-error" style="display: none;"></div>
+          <div id="detection-results" class="detection-results" style="display: none;">
+            <div class="detection-row">
+              <span class="detection-label">Type</span>
+              <span class="detection-value" id="detect-type">—</span>
+            </div>
+            <div class="detection-row">
+              <span class="detection-label">Framework</span>
+              <span class="detection-value" id="detect-framework">—</span>
+            </div>
+            <div class="detection-row">
+              <span class="detection-label">Build Command</span>
+              <span class="detection-value" id="detect-install">—</span>
+            </div>
+            <div class="detection-row">
+              <span class="detection-label">Start Command</span>
+              <span class="detection-value" id="detect-dev">—</span>
+            </div>
+            <div class="detection-row">
+              <span class="detection-label">Port</span>
+              <span class="detection-value" id="detect-port">—</span>
+            </div>
+          </div>
+        </div>
+
         <div class="form-actions">
           <a href="/" class="btn">Cancel</a>
           <button type="submit" class="btn btn-primary">Add Project</button>
@@ -43,20 +71,62 @@
       </form>
 
       <script>
-        const pathInput = document.getElementById('path');
-        const nameInput = document.getElementById('name');
-        const subdomainPreview = document.getElementById('subdomain-preview');
+        var pathInput = document.getElementById('path');
+        var nameInput = document.getElementById('name');
+        var subdomainPreview = document.getElementById('subdomain-preview');
+        var lastDetectedPath = '';
 
-        function folderToName(path) {
-          return path.replace(/\/+$/, '').split('/').pop() || '';
+        function folderToName(p) {
+          return p.replace(/\/+$/, '').split('/').pop() || '';
+        }
+
+        function runDetection(projectPath) {
+          if (!projectPath || projectPath === lastDetectedPath) return;
+          lastDetectedPath = projectPath;
+
+          var preview = document.getElementById('detection-preview');
+          var loading = document.getElementById('detection-loading');
+          var error = document.getElementById('detection-error');
+          var results = document.getElementById('detection-results');
+
+          preview.style.display = '';
+          loading.style.display = '';
+          error.style.display = 'none';
+          results.style.display = 'none';
+
+          fetch('/api/detect?path=' + encodeURIComponent(projectPath))
+            .then(function (res) {
+              if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Detection failed'); });
+              return res.json();
+            })
+            .then(function (data) {
+              loading.style.display = 'none';
+              if (data.error) {
+                error.textContent = data.error;
+                error.style.display = '';
+                return;
+              }
+              document.getElementById('detect-type').textContent = data.type || '—';
+              document.getElementById('detect-framework').textContent = data.framework || '—';
+              document.getElementById('detect-install').textContent = data.installCommand || '—';
+              document.getElementById('detect-dev').textContent = data.devCommand || '—';
+              document.getElementById('detect-port').textContent = data.port || '—';
+              results.style.display = '';
+            })
+            .catch(function (err) {
+              loading.style.display = 'none';
+              error.textContent = err.message;
+              error.style.display = '';
+            });
         }
 
         pathInput.addEventListener('change', function() {
-          const name = folderToName(this.value);
+          var name = folderToName(this.value);
           if (name && !nameInput.dataset.userEdited) {
             nameInput.value = name;
             subdomainPreview.textContent = name;
           }
+          runDetection(this.value);
         });
 
         nameInput.addEventListener('input', function() {

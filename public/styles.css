@@ -787,6 +787,65 @@ main {
   align-items: center;
 }
 
+/* ---- Detection Preview ---- */
+.detection-preview {
+  margin: 1rem 0 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px dashed var(--border-inner);
+}
+
+.detection-title {
+  font-family: var(--font-pixel);
+  font-size: 0.55rem;
+  letter-spacing: 1px;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+.detection-loading {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+  animation: pulse 1s infinite;
+}
+
+.detection-error {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--accent-red);
+  letter-spacing: 0.5px;
+}
+
+.detection-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.detection-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.detection-label {
+  font-family: var(--font-pixel);
+  font-size: 0.45rem;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.detection-value {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--accent-cyan);
+}
+
 .path-input-row {
   display: flex;
   gap: 0.5rem;
