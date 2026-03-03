@@ -650,7 +650,7 @@ if (config.https) {
   // Default cert (*.jump.sh)
   const defaultCert = loadCertPair(config.certPath, 'default (*.jump.sh)');
 
-  // Load certs from all subdirectories (e.g. certs/username/)
+  // Load certs from all subdirectories (e.g. certs/username/ → *.username.jump.sh)
   const sniContexts = {};
   let firstSubCert = null;
   try {
@@ -680,7 +680,7 @@ if (config.https) {
     const httpsOptions = {
       ...primary,
       SNICallback: (hostname, cb) => {
-        // Match *.{name}.jump.sh for each loaded subdirectory cert
+        // Match *.{name}.jump.sh hostnames against discovered certs
         for (const name of Object.keys(sniContexts)) {
           if (hostname.endsWith(`.${name}.jump.sh`) || hostname === `${name}.jump.sh`) {
             return cb(null, sniContexts[name]);
