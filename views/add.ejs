@@ -258,15 +258,16 @@
         browser.appendChild(colEl)
       }
 
-      // Scroll right to show new column
-      browser.scrollLeft = browser.scrollWidth
-      // Scroll selected items into view vertically within their columns
-      var selectedItems = browser.querySelectorAll('.column-item.selected')
-      for (var s = 0; s < selectedItems.length; s++) {
-        selectedItems[s].scrollIntoView({ block: 'nearest', inline: 'nearest' })
-      }
-      // Re-pin horizontal scroll to the right
-      browser.scrollLeft = browser.scrollWidth
+      // Scroll after layout completes so columns are measured
+      requestAnimationFrame(function () {
+        // Scroll selected items into view vertically within their columns
+        var selectedItems = browser.querySelectorAll('.column-item.selected')
+        for (var s = 0; s < selectedItems.length; s++) {
+          selectedItems[s].scrollIntoView({ block: 'nearest' })
+        }
+        // Pin horizontal scroll to the right to show newest column
+        browser.scrollLeft = browser.scrollWidth
+      })
     }
 
     function onItemClick(e) {
