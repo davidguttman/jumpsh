@@ -34,7 +34,7 @@ describe('getRegisterApiOrigin', () => {
     delete process.env.JUMPSH_API;
     delete process.env.JUMPSH_API_ORIGIN;
     const { getRegisterApiOrigin } = await import('../lib/ssh-register.js?t=3');
-    assert.equal(getRegisterApiOrigin(), 'https://api.jump.sh');
+    assert.equal(getRegisterApiOrigin(), 'https://jump.sh');
   });
 });
 
