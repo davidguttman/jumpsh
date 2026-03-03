@@ -29,6 +29,16 @@ function getProjectSlug(project) {
   return project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
 }
 
+/** Extract user overrides from a project record (null values are ignored). */
+function getOverrides(project) {
+  const o = {};
+  if (project.override_build_command) o.build = project.override_build_command;
+  if (project.override_start_command) o.start = project.override_start_command;
+  if (project.override_port) o.port = project.override_port;
+  if (project.override_docker_image) o.dockerImage = project.override_docker_image;
+  return Object.keys(o).length ? o : null;
+}
+
 class DockerManager {
   constructor(db) {
     this.db = db;
@@ -178,7 +188,8 @@ class DockerManager {
       if (!assignedPort) assignedPort = 10000;
 
       try {
-        const result = generateCompose(projectPath, slug, detection, assignedPort);
+        const overrides = getOverrides(project);
+        const result = generateCompose(projectPath, slug, detection, assignedPort, { overrides });
         composePath = result.composePath;
         if (result.skipped) {
           console.log(`Using existing ~/.jump.sh/${slug}/docker-compose.yml for ${name}`);
@@ -217,7 +228,8 @@ class DockerManager {
       if (!assignedPort) assignedPort = 10000;
 
       try {
-        const refreshed = generateCompose(projectPath, slug, detection, assignedPort, { force: true });
+        const overrides = getOverrides(project);
+        const refreshed = generateCompose(projectPath, slug, detection, assignedPort, { force: true, overrides });
         composePath = refreshed.composePath;
       } catch (err) {
         return { success: false, error: `Compose refresh failed: ${err.message}` };
@@ -261,7 +273,8 @@ class DockerManager {
           });
           // Regenerate compose with new port
           const detection = detectProjectType(projectPath);
-          generateCompose(projectPath, slug, detection, newPort, { force: true });
+          const overrides = getOverrides(project);
+          generateCompose(projectPath, slug, detection, newPort, { force: true, overrides });
           console.log(`Retrying with port ${newPort}...`);
           // Retry once
           this._emitStartup(id, { step: 1, totalSteps: TOTAL_STEPS, label: STEP_LABELS[1] });

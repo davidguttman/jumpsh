@@ -327,6 +327,37 @@ app.delete('/projects/:id', async (req, res) => {
   });
 });
 
+// Update project overrides
+app.patch('/api/projects/:id', (req, res) => {
+  const { id } = req.params;
+  const allowed = ['override_build_command', 'override_start_command', 'override_port', 'override_docker_image'];
+  const updates = {};
+  for (const key of allowed) {
+    if (key in req.body) {
+      // null clears the override, otherwise use the value
+      updates[key] = req.body[key] === null ? null : req.body[key];
+    }
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No valid override fields provided' });
+  }
+
+  db.getProject(id, (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    db.updateProject(id, updates, (err) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      db.getProject(id, (err, updated) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(updated);
+      });
+    });
+  });
+});
+
 // API: Get single project with status
 app.get('/api/projects/:id', async (req, res) => {
   const { id } = req.params;
