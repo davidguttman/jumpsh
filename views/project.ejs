@@ -80,14 +80,16 @@
         </div>
       </div>
 
-      <div class="project-actions">
-        <% if (project.status === 'running') { %>
-          <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
-          <button class="btn" onclick="restartProject(<%= project.id %>)">Restart</button>
-        <% } else { %>
-          <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
-        <% } %>
+      <div class="project-actions" style="display: flex; justify-content: space-between; align-items: center;">
         <button class="btn btn-danger-outline" onclick="deleteProject(<%= project.id %>)">Delete</button>
+        <div style="display: flex; gap: 0.5rem;">
+          <% if (project.status === 'running') { %>
+            <button class="btn" onclick="restartProject(<%= project.id %>)">Restart</button>
+            <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
+          <% } else { %>
+            <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
+          <% } %>
+        </div>
       </div>
 
       <% if (worktrees.length > 0) { %>
@@ -195,15 +197,18 @@
       }
     }
 
-    async function stopProject(id) {
+    async function stopProject(id, { reload = true } = {}) {
       const res = await fetch(`/projects/${id}/stop`, { method: 'POST' });
-      if (res.ok) location.reload();
+      if (res.ok) { if (reload) location.reload(); }
       else alert('Error stopping project');
+      return res;
     }
 
     async function restartProject(id) {
-      await stopProject(id);
-      setTimeout(() => startProject(id), 1000);
+      const res = await stopProject(id, { reload: false });
+      if (res.ok) {
+        setTimeout(() => startProject(id), 1000);
+      }
     }
 
     async function deleteProject(id) {
