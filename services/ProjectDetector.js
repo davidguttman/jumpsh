@@ -275,7 +275,7 @@ function findGenericPythonEntrypoint(projectPath) {
 // ---- Ruby detection ----
 
 function detectRuby(projectPath) {
-  const rubyImage = 'ruby:3.2-slim';
+  const rubyImage = 'ruby:3.2';
 
   // Rails: Gemfile + config.ru
   if (fs.existsSync(path.join(projectPath, 'config.ru'))) {
