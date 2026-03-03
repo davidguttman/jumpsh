@@ -221,6 +221,15 @@ main {
   50% { opacity: 0.6; }
 }
 
+/* ---- Startup Progress ---- */
+.startup-progress {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+  animation: pulse 1s infinite;
+}
+
 /* ---- Description ---- */
 .description {
   color: var(--text-muted);

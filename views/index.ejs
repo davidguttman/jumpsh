@@ -41,9 +41,9 @@
                 <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
               <% } %>
               <% if (project.status === 'running') { %>
-                <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)" >Stop</button>
+                <button class="btn btn-danger" id="project-btn-<%= project.id %>" onclick="stopProject(<%= project.id %>)">Stop</button>
               <% } else { %>
-                <button class="btn btn-success" onclick="startProject(<%= project.id %>)" >Start</button>
+                <button class="btn btn-success" id="project-btn-<%= project.id %>" onclick="startProject(<%= project.id %>)">Start</button>
               <% } %>
             </div>
 
@@ -61,9 +61,9 @@
                         <span class="wt-branch-name"><%= wt.branch_name %></span>
                       <% } %>
                       <% if (wt.status === 'running') { %>
-                        <button class="btn btn-danger btn-sm" onclick="stopProject(<%= wt.id %>)">Stop</button>
+                        <button class="btn btn-danger btn-sm" id="project-btn-<%= wt.id %>" onclick="stopProject(<%= wt.id %>)">Stop</button>
                       <% } else { %>
-                        <button class="btn btn-success btn-sm" onclick="startProject(<%= wt.id %>)">Start</button>
+                        <button class="btn btn-success btn-sm" id="project-btn-<%= wt.id %>" onclick="startProject(<%= wt.id %>)">Start</button>
                       <% } %>
                     </li>
                   <% } %>
@@ -77,16 +77,39 @@
   </main>
 
   <script>
+    function subscribeStartup(id, btn) {
+      var es = new EventSource('/projects/' + id + '/startup');
+      es.onmessage = function(e) {
+        var data = JSON.parse(e.data);
+        if (data.step && data.totalSteps) {
+          btn.textContent = 'Step ' + data.step + '/' + data.totalSteps;
+        }
+        if (data.done && !data.error) {
+          es.close();
+          location.reload();
+        }
+        if (data.error) {
+          es.close();
+          btn.disabled = false;
+          btn.textContent = 'Start';
+        }
+      };
+      es.onerror = function() {
+        es.close();
+        setTimeout(function() { location.reload(); }, 2000);
+      };
+    }
+
     async function startProject(id) {
       const btn = event.target;
       btn.disabled = true;
       btn.textContent = 'Starting...';
 
+      subscribeStartup(id, btn);
+
       try {
         const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
-        if (res.ok) {
-          pollHealth(id);
-        } else {
+        if (!res.ok) {
           const data = await res.json();
           alert('Error: ' + data.error);
           btn.disabled = false;
@@ -97,20 +120,6 @@
         btn.disabled = false;
         btn.textContent = 'Start';
       }
-    }
-
-    function pollHealth(id) {
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/projects/${id}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data.health && data.health !== 'starting') {
-            clearInterval(interval);
-            location.reload();
-          }
-        } catch {}
-      }, 1000);
     }
 
     async function stopProject(id) {
@@ -138,18 +147,22 @@
     // Auto-refresh every 30 seconds
     setTimeout(() => location.reload(), 30000);
 
-    // Auto-poll all projects with health='starting' on page load
+    // Subscribe to startup progress for all projects currently starting
     <% for (const project of projects) { %>
       <% if (project.health === 'starting') { %>
-    pollHealth('<%= project.id %>');
+    (function() {
+      var btn = document.getElementById('project-btn-<%= project.id %>');
+      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; subscribeStartup('<%= project.id %>', btn); }
+    })();
       <% } %>
     <% } %>
-
-    // Auto-poll all worktrees with health='starting' on page load
     <% for (const wts of Object.values(worktreesByParent)) { %>
       <% for (const wt of wts) { %>
         <% if (wt.health === 'starting') { %>
-    pollHealth('<%= wt.id %>');
+    (function() {
+      var btn = document.getElementById('project-btn-<%= wt.id %>');
+      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; subscribeStartup('<%= wt.id %>', btn); }
+    })();
         <% } %>
       <% } %>
     <% } %>

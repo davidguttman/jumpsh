@@ -259,6 +259,51 @@ app.get('/projects/:id/logs/stream', (req, res) => {
   });
 });
 
+// Startup progress (SSE)
+app.get('/projects/:id/startup', (req, res) => {
+  const { id } = req.params;
+
+  db.getProject(id, (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
+
+    const health = docker.getHealth(project.id);
+    if (health === 'healthy') {
+      res.write(`data: ${JSON.stringify({ step: 5, totalSteps: 5, label: 'Ready!', done: true })}\n\n`);
+      res.end();
+      return;
+    }
+    if (health === 'unhealthy') {
+      res.write(`data: ${JSON.stringify({ error: 'Health check failed', done: true })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Send current step if available
+    const currentStep = docker.getStartupStep(project.id);
+    if (currentStep) {
+      res.write(`data: ${JSON.stringify(currentStep)}\n\n`);
+    }
+
+    const unsubscribe = docker.addStartupListener(project.id, (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      if (data.done) {
+        unsubscribe();
+        res.end();
+      }
+    });
+
+    req.on('close', unsubscribe);
+  });
+});
+
 // Delete project
 app.delete('/projects/:id', async (req, res) => {
   const { id } = req.params;
@@ -279,6 +324,20 @@ app.delete('/projects/:id', async (req, res) => {
       }
       res.json({ success: true });
     });
+  });
+});
+
+// API: Get single project with status
+app.get('/api/projects/:id', async (req, res) => {
+  const { id } = req.params;
+  db.getProject(id, async (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    const status = await docker.getStatus(project);
+    const port = status.running ? await docker.getPort(project) : null;
+    const health = docker.getHealthWithProbe(project, status);
+    res.json({ ...project, status: status.running ? 'running' : 'stopped', port, health });
   });
 });
 

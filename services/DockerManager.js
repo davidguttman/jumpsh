@@ -11,6 +11,15 @@ import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
 const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
 const DOCKER_CMD_TIMEOUT = 30 * 1000;        // 30s for status/logs/down
 
+const TOTAL_STEPS = 5;
+const STEP_LABELS = {
+  1: 'Building image...',
+  2: 'Creating container...',
+  3: 'Starting container...',
+  4: 'Waiting for health check...',
+  5: 'Ready!'
+};
+
 /**
  * Derive a slug from project subdomain or name.
  * @param {object} project - Project object with subdomain and name
@@ -24,6 +33,87 @@ class DockerManager {
   constructor(db) {
     this.db = db;
     this.healthStates = new Map(); // projectId -> 'unknown' | 'starting' | 'healthy' | 'unhealthy'
+    this.startupListeners = new Map(); // projectId -> Set<callback>
+    this.startupSteps = new Map(); // projectId -> current step data
+  }
+
+  _emitStartup(projectId, data) {
+    const id = projectId.toString();
+    this.startupSteps.set(id, data);
+    const listeners = this.startupListeners.get(id);
+    if (listeners) {
+      for (const cb of listeners) cb(data);
+    }
+    if (data.done) {
+      this.startupSteps.delete(id);
+    }
+  }
+
+  addStartupListener(projectId, callback) {
+    const id = projectId.toString();
+    if (!this.startupListeners.has(id)) {
+      this.startupListeners.set(id, new Set());
+    }
+    this.startupListeners.get(id).add(callback);
+    return () => {
+      const set = this.startupListeners.get(id);
+      if (set) {
+        set.delete(callback);
+        if (set.size === 0) this.startupListeners.delete(id);
+      }
+    };
+  }
+
+  getStartupStep(projectId) {
+    return this.startupSteps.get(projectId?.toString()) || null;
+  }
+
+  _detectStep(line, currentStep) {
+    const lower = line.toLowerCase();
+    if (/\bstarted\b/.test(lower)) return Math.max(currentStep, 3);
+    if (/\bstarting\b/.test(lower)) return Math.max(currentStep, 3);
+    if (/\bcreated?\b/.test(lower)) return Math.max(currentStep, 2);
+    if (/\bcreating\b/.test(lower)) return Math.max(currentStep, 2);
+    return currentStep;
+  }
+
+  _execComposeStreaming(args, composePath, opts, projectId) {
+    return new Promise((resolve, reject) => {
+      const { command, args: spawnArgs } = buildComposeSpawn(args, composePath);
+      const child = spawn(command, spawnArgs, { cwd: opts.cwd });
+      let stdout = '';
+      let stderr = '';
+      let currentStep = 1;
+
+      const processLine = (line) => {
+        if (!line.trim()) return;
+        const newStep = this._detectStep(line, currentStep);
+        if (newStep > currentStep) {
+          currentStep = newStep;
+          this._emitStartup(projectId, { step: currentStep, totalSteps: TOTAL_STEPS, label: STEP_LABELS[currentStep] });
+        }
+      };
+
+      child.stdout.on('data', (data) => {
+        stdout += data;
+        data.toString().split('\n').forEach(processLine);
+      });
+      child.stderr.on('data', (data) => {
+        stderr += data;
+        data.toString().split('\n').forEach(processLine);
+      });
+
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(Object.assign(new Error('Docker compose timed out'), { stdout, stderr }));
+      }, opts.timeout || DOCKER_BUILD_TIMEOUT);
+
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve({ stdout, stderr });
+        else reject(Object.assign(new Error(`Docker compose failed (exit ${code})`), { stdout, stderr }));
+      });
+    });
   }
 
   /**
@@ -135,16 +225,20 @@ class DockerManager {
     }
 
     try {
-      await execCompose(
+      this.healthStates.set(id.toString(), 'starting');
+      this._emitStartup(id, { step: 1, totalSteps: TOTAL_STEPS, label: STEP_LABELS[1] });
+
+      await this._execComposeStreaming(
         ['up', '-d', '--build'],
         composePath,
-        { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+        { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT },
+        id
       );
       const status = await this.getStatus(project);
       projectInfo(projectPath, 'Container started', { name });
       const port = await this.getPort(project);
       if (port) {
-        this.healthStates.set(id.toString(), 'starting');
+        this._emitStartup(id, { step: 4, totalSteps: TOTAL_STEPS, label: STEP_LABELS[4] });
         this._probeHealth(project, port);
       }
       return { success: true, status };
@@ -170,25 +264,31 @@ class DockerManager {
           generateCompose(projectPath, slug, detection, newPort, { force: true });
           console.log(`Retrying with port ${newPort}...`);
           // Retry once
-          await execCompose(
+          this._emitStartup(id, { step: 1, totalSteps: TOTAL_STEPS, label: STEP_LABELS[1] });
+          await this._execComposeStreaming(
             ['up', '-d', '--build'],
             composePath,
-            { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+            { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT },
+            id
           );
           const retryStatus = await this.getStatus(project);
           projectInfo(projectPath, 'Container started after port retry', { name, port: newPort });
           const retryPort = await this.getPort(project);
           if (retryPort) {
-            this.healthStates.set(id.toString(), 'starting');
+            this._emitStartup(id, { step: 4, totalSteps: TOTAL_STEPS, label: STEP_LABELS[4] });
             this._probeHealth(project, retryPort);
           }
           return { success: true, status: retryStatus };
         } catch (retryError) {
           projectError(projectPath, 'Port conflict retry failed', { name, error: retryError.message });
+          this.healthStates.set(id.toString(), 'unhealthy');
+          this._emitStartup(id, { error: `Port conflict retry failed: ${retryError.message}`, done: true });
           return { success: false, error: `Port conflict retry failed: ${retryError.message}` };
         }
       }
       projectError(projectPath, 'Container start failed', { name, error: error.message });
+      this.healthStates.set(id.toString(), 'unhealthy');
+      this._emitStartup(id, { error: error.message, done: true });
       return { success: false, error: error.message };
     }
   }
@@ -197,6 +297,7 @@ class DockerManager {
     const { path: projectPath } = project;
     const { composePath } = this.getComposeFile(project);
     this.healthStates.set(project.id.toString(), 'unknown');
+    this._emitStartup(project.id, { error: 'Project stopped', done: true });
 
     try {
       await execCompose(['down'], composePath, { cwd: projectPath, timeout: DOCKER_CMD_TIMEOUT });
@@ -362,12 +463,14 @@ class DockerManager {
       const status = await this.getStatus(project);
       if (!status.running) {
         this.healthStates.set(id, 'unknown');
+        this._emitStartup(project.id, { error: 'Container stopped unexpectedly', done: true });
         return;
       }
 
       if (await this._canConnect(port)) {
         this.healthStates.set(id, 'healthy');
         console.log(`✓ ${project.name} health check passed on port ${port}`);
+        this._emitStartup(project.id, { step: 5, totalSteps: TOTAL_STEPS, label: STEP_LABELS[5], done: true });
         return;
       }
 
@@ -376,6 +479,7 @@ class DockerManager {
 
     this.healthStates.set(id, 'unhealthy');
     console.log(`✗ ${project.name} health check failed after 60s`);
+    this._emitStartup(project.id, { error: 'Health check failed after 60s', done: true });
   }
 
   async _canConnect(port) {
@@ -411,6 +515,7 @@ class DockerManager {
     const health = this.getHealth(project.id);
     if (health === 'unknown' && status.running) {
       this.healthStates.set(project.id.toString(), 'starting');
+      this._emitStartup(project.id, { step: 4, totalSteps: TOTAL_STEPS, label: STEP_LABELS[4] });
       this.getPort(project).then(port => {
         if (port) this._probeHealth(project, port);
       });

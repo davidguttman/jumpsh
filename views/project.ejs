@@ -25,6 +25,7 @@
           health === 'unhealthy' ? 'FAILED' :
           project.status === 'running' ? 'RUNNING' : 'STOPPED'
         %></span>
+        <span class="startup-progress" id="startup-progress" style="display: none;"></span>
       </div>
 
       <div class="project-info">
@@ -126,32 +127,43 @@
     const projectId = <%= project.id %>;
     let eventSource = null;
 
-    async function startProject(id) {
-      const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
-      if (res.ok) {
-        pollHealth(id);
-      } else {
-        alert('Error starting project');
-      }
-    }
-
-    function pollHealth(id) {
-      const badge = document.getElementById('status-badge');
+    function subscribeStartup(id) {
+      var badge = document.getElementById('status-badge');
+      var progress = document.getElementById('startup-progress');
       if (badge) {
         badge.className = 'status-badge starting';
         badge.textContent = 'STARTING...';
       }
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/projects/${id}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data.health && data.health !== 'starting') {
-            clearInterval(interval);
-            location.reload();
-          }
-        } catch {}
-      }, 1000);
+      if (progress) progress.style.display = '';
+
+      var es = new EventSource('/projects/' + id + '/startup');
+      es.onmessage = function(e) {
+        var data = JSON.parse(e.data);
+        if (data.step && data.totalSteps && progress) {
+          progress.textContent = 'Step ' + data.step + '/' + data.totalSteps + ': ' + (data.label || '');
+        }
+        if (data.done && !data.error) {
+          es.close();
+          location.reload();
+        }
+        if (data.error) {
+          es.close();
+          if (progress) progress.textContent = data.error;
+          setTimeout(function() { location.reload(); }, 2000);
+        }
+      };
+      es.onerror = function() {
+        es.close();
+        setTimeout(function() { location.reload(); }, 2000);
+      };
+    }
+
+    async function startProject(id) {
+      subscribeStartup(id);
+      const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
+      if (!res.ok) {
+        alert('Error starting project');
+      }
     }
 
     async function stopProject(id) {
@@ -210,9 +222,9 @@
       };
     }
 
-    // Auto-poll if health is 'starting' on page load
+    // Subscribe to startup progress if health is 'starting' on page load
     <% if (health === 'starting') { %>
-    pollHealth(projectId);
+    subscribeStartup(projectId);
     <% } %>
 
     // Worktree inline logs
