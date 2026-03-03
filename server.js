@@ -36,7 +36,7 @@ const certPath = resolvePath(
   process.env.JUMPSH_CERT_PATH || '~/.jump.sh/certs'
 );
 
-// Auto-detect domain from cert subdirectories (e.g. certs/dmg/ → dmg.jump.sh)
+// Auto-detect domain from cert subdirectories (e.g. certs/username/ → username.jump.sh)
 function detectDomainFromCerts() {
   try {
     const entries = fs.readdirSync(certPath, { withFileTypes: true });
@@ -650,7 +650,7 @@ if (config.https) {
   // Default cert (*.jump.sh)
   const defaultCert = loadCertPair(config.certPath, 'default (*.jump.sh)');
 
-  // Load certs from all subdirectories (e.g. certs/dmg/, certs/davidguttman/)
+  // Load certs from all subdirectories (e.g. certs/username/)
   const sniContexts = {};
   let firstSubCert = null;
   try {

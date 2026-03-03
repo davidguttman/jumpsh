@@ -21,7 +21,7 @@ class SubdomainProxy {
       const host = req.get('host');
       if (!host) return next();
 
-      // Check remote routes first (full hostname match, e.g., "my-app.dmg.jump.sh")
+      // Check remote routes first (full hostname match, e.g., "my-app.username.jump.sh")
       const remotePort = this._lookupRemoteRoute(host);
       if (remotePort) {
         const proxy = this.getOrCreateProxy(remotePort);
@@ -74,7 +74,7 @@ class SubdomainProxy {
   }
 
   /**
-   * Look up a remote route by full hostname (e.g., "my-app.dmg.jump.sh").
+   * Look up a remote route by full hostname (e.g., "my-app.username.jump.sh").
    * Returns the target port or null.
    */
   _lookupRemoteRoute(host) {

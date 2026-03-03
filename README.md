@@ -7,7 +7,7 @@ Local dev server with Docker containers + automatic subdomain routing.
 ## Features
 
 - **Subdomain routing** — Access projects at `project-name.jump.sh` instead of `localhost:3847`
-- **Remote routing** — Register with the control plane for `*.dmg.jump.sh` access
+- **Remote routing** — Register with the control plane for `*.username.jump.sh` access
 - **Docker-based** — Reliable start/stop, no orphan processes
 - **Git worktree support** — Auto-discovers `.worktrees/`, creates `project--branch.jump.sh` URLs
 - **Live logs** — Stream container logs in the dashboard
@@ -129,7 +129,7 @@ jumpsh sync
 jumpsh status
 ```
 
-Projects are accessible at `project-name.dmg.jump.sh` (configurable via `JUMPSH_REMOTE_DOMAIN`).
+Projects are accessible at `project-name.username.jump.sh` (configurable via `JUMPSH_REMOTE_DOMAIN`).
 The daemon automatically syncs routes every 30 seconds when logged in.
 
 ## Log Locations

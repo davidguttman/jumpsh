@@ -113,7 +113,7 @@ for each subdirectory in certPath:
 
 SNICallback(hostname, cb):
   // Strip .jump.sh suffix, extract the user portion
-  // e.g. "foo.david.jump.sh" → "david", "dash.dmg.jump.sh" → "dmg"
+  // e.g. "foo.david.jump.sh" → "david", "dash.username.jump.sh" → "username"
   // Strategy: match hostname against "*.{name}.jump.sh" for each name in sniContexts
   for (const name of Object.keys(sniContexts)):
     if hostname ends with `.${name}.jump.sh` or hostname === `${name}.jump.sh`:
