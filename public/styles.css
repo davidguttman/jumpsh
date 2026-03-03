@@ -362,8 +362,7 @@ main {
 
 .status-dot.running {
   background: var(--accent-green);
-  
-  box-shadow: 0 0 4px var(--accent-green);
+
 }
 
 .status-dot.starting {

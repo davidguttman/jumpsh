@@ -22,6 +22,16 @@
   ],
   "author": "David Guttman",
   "license": "MIT",
+  "files": [
+    "bin/",
+    "lib/",
+    "services/",
+    "views/",
+    "public/",
+    "server.js",
+    "database.js",
+    "scripts/enable-low-port-bind-linux.sh"
+  ],
   "dependencies": {
     "dotenv": "^17.0.0",
     "ejs": "^3.1.9",
