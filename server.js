@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import https from 'https';
+import tls from 'tls';
 import fs from 'fs';
 import os from 'os';
 
@@ -412,23 +413,57 @@ if (config.https && !certsExist()) {
   }
 }
 
+// ============ TLS / SNI Setup ============
+
+function loadCertPair(dir, label) {
+  const keyFile = path.join(dir, 'server-key.pem');
+  const certFile = path.join(dir, 'server.pem');
+  if (!fs.existsSync(keyFile) || !fs.existsSync(certFile)) {
+    console.warn(`[SNI] ${label} certs not found in ${dir}, skipping`);
+    return null;
+  }
+  console.log(`[SNI] Loaded ${label} certs from ${dir}`);
+  return { key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile) };
+}
+
 let server;
 if (config.https) {
-  const keyPath = path.join(config.certPath, 'server-key.pem');
-  const certFile = path.join(config.certPath, 'server.pem');
+  // Default cert (*.jump.sh)
+  const defaultCert = loadCertPair(config.certPath, 'default (*.jump.sh)');
 
-  if (!fs.existsSync(keyPath) || !fs.existsSync(certFile)) {
+  // Secondary cert (*.dmg.jump.sh)
+  const dmgCertDir = path.join(config.certPath, 'dmg');
+  const dmgCert = loadCertPair(dmgCertDir, '*.dmg.jump.sh');
+
+  if (!defaultCert && !dmgCert) {
     console.warn(
-      `JUMPSH_HTTPS=true but certs not found at ${config.certPath}\n` +
+      `JUMPSH_HTTPS=true but no certs found.\n` +
       `Place cert files (server.pem and server-key.pem) in ${config.certPath}.\n` +
       `Falling back to HTTP.`
     );
     config.https = false;
     server = http.createServer(app);
   } else {
+    // Use whichever cert is available as the default
+    const primary = defaultCert || dmgCert;
+
+    // Build SNI context map
+    const sniContexts = {};
+    if (dmgCert) {
+      sniContexts['dmg'] = tls.createSecureContext(dmgCert);
+    }
+
     const httpsOptions = {
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certFile)
+      ...primary,
+      SNICallback: (hostname, cb) => {
+        // Match *.dmg.jump.sh hostnames
+        if (hostname.endsWith('.dmg.jump.sh') || hostname === 'dmg.jump.sh') {
+          const ctx = sniContexts['dmg'];
+          if (ctx) return cb(null, ctx);
+        }
+        // Fall through to default cert
+        cb(null);
+      }
     };
     server = https.createServer(httpsOptions, app);
   }
