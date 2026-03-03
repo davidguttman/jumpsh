@@ -14,6 +14,7 @@ import DockerManager from './services/DockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { detectProjectType } from './services/ProjectDetector.js';
+import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { RemoteSyncer } from './lib/remote/syncer.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
@@ -439,10 +440,21 @@ app.patch('/api/projects/:id', (req, res) => {
     return res.status(400).json({ error: 'No valid override fields provided' });
   }
 
+  // Docker requires lowercase image names
+  if (updates.override_docker_image) {
+    updates.override_docker_image = updates.override_docker_image.toLowerCase();
+  }
+
   db.getProject(id, (err, project) => {
     if (err || !project) {
       return res.status(404).json({ error: 'Project not found' });
     }
+
+    // Delete cached Dockerfile when any override changes so it regenerates on next start
+    const slug = project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const dockerfilePath = path.join(getJumpshDir(slug), 'Dockerfile');
+    try { fs.unlinkSync(dockerfilePath); } catch {}
+
     db.updateProject(id, updates, (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
