@@ -398,6 +398,17 @@ main {
   margin-left: auto;
 }
 
+.wt-hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  opacity: 0.6;
+}
+
+.project-detail > .wt-hint {
+  margin-top: 1rem;
+}
+
 /* ---- Status Indicator ---- */
 .status-indicator {
   font-family: var(--font-pixel);

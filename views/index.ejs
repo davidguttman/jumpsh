@@ -40,6 +40,9 @@
             </div>
 
             <% const worktrees = worktreesByParent[project.id] || []; %>
+            <% if (worktrees.length === 0) { %>
+              <p class="wt-hint">Place worktrees in <code>.worktrees/</code> to auto-discover</p>
+            <% } %>
             <% if (worktrees.length > 0) { %>
               <div class="worktrees">
                 <h4>Worktrees (<%= worktrees.length %>)</h4>

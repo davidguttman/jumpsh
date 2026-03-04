@@ -110,6 +110,9 @@
         </div>
       </div>
 
+      <% if (worktrees.length === 0) { %>
+        <p class="wt-hint">Place worktrees in <code>.worktrees/</code> to auto-discover</p>
+      <% } %>
       <% if (worktrees.length > 0) { %>
         <div class="worktrees-section">
           <h3>Worktrees (<%= worktrees.length %>)</h3>
