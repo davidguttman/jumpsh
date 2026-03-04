@@ -160,7 +160,7 @@ app.get('/', async (req, res) => {
 
 // Add project form
 app.get('/add', (req, res) => {
-  res.render('add', { config: req.requestConfig, homeDir: os.homedir() });
+  res.render('add', { config: req.requestConfig, homeDir: os.homedir(), prefillDir: req.query.dir || '' });
 });
 
 // Normalize a creation error into { status, error, field?, code? }

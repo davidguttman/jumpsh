@@ -287,6 +287,7 @@
     var pathInput = document.getElementById('path')
     var browserSection = document.getElementById('browser-section')
     var homeDir = '<%= homeDir %>'
+    var prefillDir = '<%= prefillDir %>'
 
     document.getElementById('modal-select').addEventListener('click', function () {
       pathInput.value = getSelectedPath()
@@ -320,7 +321,14 @@
       })
     }
 
-    initBrowser(homeDir)
+    if (prefillDir) {
+      // Pre-fill: set path directly and skip to form
+      pathInput.value = prefillDir
+      pathInput.dispatchEvent(new Event('change'))
+      browserSection.style.display = 'none'
+    } else {
+      initBrowser(homeDir)
+    }
 
     function getSelectedPath() {
       var parts = ['/']
