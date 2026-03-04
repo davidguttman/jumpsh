@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>jump.sh – Zero-setup local dev URLs</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦘</text></svg>">
   <style>
     :root {
       --bg: #0a0a0a;
@@ -49,7 +50,7 @@
     ul { margin: 1rem 0 1rem 1.5rem; }
     li { margin-bottom: 0.5rem; }
     a { color: var(--accent); }
-    .highlight {
+    .highlight { 
       background: linear-gradient(135deg, #1a2a1a 0%, #1a1a2a 100%);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -63,50 +64,39 @@
 <body>
   <div class="hero">
     <h1>jump.sh</h1>
-    <p class="tagline">Zero-setup HTTPS for local dev</p>
-    <p>Real URLs. Valid certs. No config.</p>
+    <p class="tagline">Local dev servers with real HTTPS URLs</p>
+    <p>No port hunting. No cert wrangling. No DNS config.<br>
+    Every project gets a stable <code>https://yourapp.jump.sh</code> URL that just works.</p>
   </div>
 
-  <h2>Install</h2>
-  <pre><code>npx jumpsh install</code></pre>
-  <p>Installs the daemon as a system service. That's it — no DNS config, no cert generation, no sudo.</p>
+  <h2>Problems jump.sh solves</h2>
+  <ul>
+    <li><strong>Port conflicts</strong> — Running 5 projects on localhost means remembering which port is which. jump.sh gives each project a named URL.</li>
+    <li><strong>No HTTPS locally</strong> — Service workers, secure cookies, and many APIs require HTTPS. jump.sh provides valid TLS certs automatically.</li>
+    <li><strong>Branch isolation</strong> — Testing a feature branch while main is running? Each git worktree gets its own URL like <code>https://myapp--feature-x.jump.sh</code>.</li>
+    <li><strong>Agent verification</strong> — AI coding agents need stable, predictable URLs to screenshot, test, and verify changes without port guessing.</li>
+  </ul>
 
-  <h2>Add a project</h2>
-  <pre><code>cd ~/projects/myapp
-npx jumpsh add</code></pre>
-  <p>Your project is now available at <code>https://myapp.jump.sh</code></p>
+  <h2>Quick start</h2>
+  <pre><code>npx jump.sh server
+# open https://dash.jump.sh in your browser
+# add your project in the dashboard</code></pre>
+  <p>Run in the foreground to try it out. When you're ready, <code>jump.sh install</code> runs it as a background service.</p>
 
   <div class="highlight">
     <h3>Built for AI agents</h3>
     <p>
-      Coding agents need stable, predictable URLs to verify their work.
-      <code>localhost:3000</code> doesn't cut it when you're running multiple projects,
-      worktrees, or parallel agent sessions.
-    </p>
-    <p>
-      jump.sh gives every project and branch a permanent URL that agents can
-      screenshot, test, and verify — without port conflicts or manual setup.
+      Coding agents need stable URLs to verify their work.
+      jump.sh gives every project a permanent <code>https://</code> URL that agents can
+      screenshot, test, and hit from any tool — no port discovery or manual setup.
     </p>
   </div>
 
-  <h2>How it runs projects</h2>
-
-  <h3>Docker Compose projects</h3>
+  <h2>Works with your stack</h2>
   <p>
-    If your project has a <code>docker-compose.yml</code>, jump.sh spins up containers
-    and proxies to them. Each project runs isolated with its own network.
-  </p>
-
-  <h3>Node.js projects</h3>
-  <p>
-    For projects with <code>package.json</code>, jump.sh runs your dev command
-    (<code>npm run dev</code>, <code>npm start</code>, etc.) and proxies to the dev server port.
-  </p>
-
-  <h3>Automatic port allocation</h3>
-  <p>
-    No more port conflicts. jump.sh allocates ports from a dedicated range (10000+) and
-    tracks them in a local database. Each project gets a stable port across restarts.
+    <strong>Docker Compose</strong> — detects <code>docker-compose.yml</code>, spins up containers, proxies to them.<br>
+    <strong>Node.js</strong> — detects <code>package.json</code>, runs your dev command, proxies to the dev server.<br>
+    Ports are allocated automatically from a dedicated range — no conflicts across projects.
   </p>
 
   <h2>Git worktrees</h2>
@@ -117,35 +107,31 @@ npx jumpsh add</code></pre>
   <pre><code>https://myapp.jump.sh           → main branch
 https://myapp--feature-x.jump.sh → .worktrees/feature-x</code></pre>
   <p>
-    Run <code>jumpsh add</code> on the main project once. Worktrees are picked up automatically
+    Run <code>jump.sh add</code> on the main project once. Worktrees are picked up automatically
     via periodic scanning — no need to register each branch.
   </p>
-
-  <div class="highlight">
-    <h3>Why worktrees matter for agents</h3>
-    <p>
-      When an agent works on a feature branch, it needs to test against <em>that branch</em>,
-      not whatever's running on the main project URL. Worktree URLs let agents verify
-      their changes in isolation without stepping on other work.
-    </p>
-    <p>
-      Supervisor agents can monitor multiple feature branches simultaneously,
-      each at a predictable URL derived from the branch name.
-    </p>
-  </div>
+  <p class="muted">Agents working on feature branches can verify changes at the branch-specific URL without interfering with main.</p>
 
   <h2>Commands</h2>
   <ul>
-    <li><code>jumpsh add [path]</code> – Register a project</li>
-    <li><code>jumpsh ls</code> – List registered projects and status</li>
-    <li><code>jumpsh start &lt;name&gt;</code> – Start a project</li>
-    <li><code>jumpsh stop &lt;name&gt;</code> – Stop a project</li>
-    <li><code>jumpsh logs &lt;name&gt;</code> – Tail project logs</li>
-    <li><code>jumpsh remove &lt;name&gt;</code> – Unregister a project</li>
-    <li><code>jumpsh certs</code> – Download/refresh TLS certs</li>
-    <li><code>jumpsh install</code> – Install daemon service</li>
-    <li><code>jumpsh install --uninstall</code> – Remove daemon service</li>
+    <li><code>jump.sh</code> — Open dashboard (or start server if not running)</li>
+    <li><code>jump.sh server</code> — Run daemon in foreground (for dev/debugging)</li>
+    <li><code>jump.sh open</code> / <code>jump.sh dashboard</code> — Open the dashboard in your browser</li>
+    <li><code>jump.sh install</code> — Install daemon service + download certs</li>
+    <li><code>jump.sh uninstall</code> — Remove daemon service</li>
+    <li><code>jump.sh ls</code> — List projects with status</li>
+    <li><code>jump.sh logs [name]</code> — Tail project logs</li>
+    <li><code>jump.sh register</code> — Register via GitHub SSH key (provisions <code>*.you.jump.sh</code>)</li>
+    <li><code>jump.sh status</code> — Show daemon and domain status</li>
   </ul>
+
+  <h2>Remote access via Tailscale</h2>
+  <p>
+    <code>jump.sh register</code> provisions a subdomain tied to your GitHub username
+    (e.g., <code>*.you.jump.sh</code>) that resolves to your Tailscale IP.
+    Access your dev URLs from any device on the same tailnet — your phone, a
+    colleague's laptop, or a CI runner — no port forwarding or public exposure required.
+  </p>
 
   <h2>How it works</h2>
   <p>
@@ -155,7 +141,7 @@ https://myapp--feature-x.jump.sh → .worktrees/feature-x</code></pre>
   </p>
   <pre><code>Browser → https://myapp.jump.sh
        → DNS: 127.0.0.1
-       → jumpsh daemon (TLS termination)
+       → jump.sh daemon (TLS termination)
        → localhost:10042 (your dev server)</code></pre>
 
   <h2>Requirements</h2>
@@ -165,8 +151,5 @@ https://myapp--feature-x.jump.sh → .worktrees/feature-x</code></pre>
     <li>macOS or Linux</li>
   </ul>
 
-  <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: #666; font-size: 0.9rem;">
-    <p><a href="https://github.com/davidguttman/jumpsh">GitHub</a></p>
-  </footer>
 </body>
 </html>
