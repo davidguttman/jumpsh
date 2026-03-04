@@ -154,9 +154,10 @@ main {
   border-radius: 4px;
   background: var(--panel-bg);
   color: var(--text-bright);
-  font-family: var(--font-mono);
+  font-family: 'SF Mono', 'Menlo', 'Cascadia Code', 'Courier New', monospace;
   font-size: 0.8rem;
   padding: 0.4rem 0.6rem;
+  text-transform: none;
 }
 
 .input:focus {
@@ -516,6 +517,7 @@ main {
   width: 100%;
   padding: 0.6rem;
   font-size: 0.9rem;
+  text-transform: none;
 }
 
 .form-group small {

@@ -274,6 +274,9 @@ app.post('/projects/:id/start', (req, res) => {
     }
 
     const result = await docker.start(project);
+    if (result.alreadyStarting) {
+      return res.status(409).json({ error: 'Project is already starting' });
+    }
     if (result.success) {
       const status = await docker.getStatus(project);
       const health = docker.getHealthWithProbe(project, status);
@@ -438,11 +441,6 @@ app.patch('/api/projects/:id', (req, res) => {
   }
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No valid override fields provided' });
-  }
-
-  // Force all settings lowercase (UI uses all-caps font)
-  for (const key of Object.keys(updates)) {
-    if (typeof updates[key] === 'string') updates[key] = updates[key].toLowerCase();
   }
 
   db.getProject(id, (err, project) => {

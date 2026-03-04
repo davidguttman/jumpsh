@@ -66,6 +66,7 @@ class DockerManager {
     this.healthStates = new Map(); // projectId -> 'unknown' | 'starting' | 'healthy' | 'unhealthy'
     this.startupListeners = new Map(); // projectId -> Set<callback>
     this.startupSteps = new Map(); // projectId -> current step data
+    this._startingProjects = new Set(); // projectIds currently being started
   }
 
   _emitStartup(projectId, data) {
@@ -170,6 +171,23 @@ class DockerManager {
   }
 
   async start(project) {
+    const { id, path: projectPath, name } = project;
+    const idStr = id.toString();
+
+    // Prevent double-start: if already starting, return early
+    if (this._startingProjects.has(idStr)) {
+      return { success: false, error: 'Already starting', alreadyStarting: true };
+    }
+    this._startingProjects.add(idStr);
+
+    try {
+      return await this._doStart(project);
+    } finally {
+      this._startingProjects.delete(idStr);
+    }
+  }
+
+  async _doStart(project) {
     const { id, path: projectPath, name } = project;
     const slug = getProjectSlug(project);
 

@@ -63,13 +63,13 @@
           <div class="settings-form">
             <div class="form-group">
               <label class="label" for="override_build_command">Build Command</label>
-              <input class="input" type="text" id="override_build_command"
+              <input class="input" type="text" id="override_build_command" autocapitalize="off"
                 value="<%= project.override_build_command || '' %>"
                 placeholder="<%= detection.installCommand || 'auto-detect' %>">
             </div>
             <div class="form-group">
               <label class="label" for="override_start_command">Start Command</label>
-              <input class="input" type="text" id="override_start_command"
+              <input class="input" type="text" id="override_start_command" autocapitalize="off"
                 value="<%= project.override_start_command || '' %>"
                 placeholder="<%= detection.devCommand || 'auto-detect' %>">
             </div>
@@ -81,7 +81,7 @@
             </div>
             <div class="form-group">
               <label class="label" for="override_docker_image">Docker Image</label>
-              <input class="input" type="text" id="override_docker_image"
+              <input class="input" type="text" id="override_docker_image" autocapitalize="off"
                 value="<%= project.override_docker_image || '' %>"
                 placeholder="<%= detection.dockerImage || 'auto-detect' %>">
             </div>
