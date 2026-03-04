@@ -474,7 +474,7 @@ app.delete('/projects/:id', async (req, res) => {
 // Update project overrides
 app.patch('/api/projects/:id', (req, res) => {
   const { id } = req.params;
-  const allowed = ['override_build_command', 'override_start_command', 'override_port', 'override_docker_image'];
+  const allowed = ['override_build_command', 'override_start_command', 'override_port', 'override_docker_image', 'override_env'];
   const updates = {};
   for (const key of allowed) {
     if (key in req.body) {
