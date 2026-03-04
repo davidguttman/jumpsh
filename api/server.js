@@ -3,7 +3,7 @@ import register from './routes/register.js'
 import certs from './routes/certs.js'
 import status from './routes/status.js'
 import updateIp from './routes/ip.js'
-import { oauthRedirect, oauthCallback, oauthStatus } from './routes/oauth.js'
+import { oauthRegister } from './routes/oauth.js'
 
 const app = express()
 const port = process.env.PORT || 3000
@@ -26,9 +26,7 @@ app.post('/api/register', register)
 app.get('/api/certs', certs)
 app.get('/api/status', status)
 app.post('/api/ip', updateIp)
-app.get('/api/oauth/github', oauthRedirect)
-app.get('/api/oauth/callback', oauthCallback)
-app.get('/api/oauth/status', oauthStatus)
+app.post('/api/oauth/register', oauthRegister)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)
