@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jump.sh – Zero-setup local dev URLs</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --fg: #e0e0e0;
+      --accent: #00d4aa;
+      --code-bg: #1a1a1a;
+      --border: #333;
+      --muted: #888;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    h1 { color: var(--accent); margin-bottom: 0.5rem; }
+    h2 { color: var(--accent); margin: 2.5rem 0 1rem; font-size: 1.25rem; }
+    h3 { color: var(--fg); margin: 1.5rem 0 0.75rem; font-size: 1.1rem; }
+    p { margin-bottom: 1rem; }
+    code {
+      background: var(--code-bg);
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 0.9em;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+    }
+    pre code { background: none; padding: 0; }
+    .hero { text-align: center; padding: 3rem 0; }
+    .hero p { font-size: 1.1rem; color: var(--muted); }
+    .tagline { font-size: 1.5rem; color: var(--fg); margin-bottom: 2rem; }
+    ul { margin: 1rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    a { color: var(--accent); }
+    .highlight {
+      background: linear-gradient(135deg, #1a2a1a 0%, #1a1a2a 100%);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .highlight h3 { margin-top: 0; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>jump.sh</h1>
+    <p class="tagline">Zero-setup HTTPS for local dev</p>
+    <p>Real URLs. Valid certs. No config.</p>
+  </div>
+
+  <h2>Install</h2>
+  <pre><code>npx jumpsh install</code></pre>
+  <p>Installs the daemon as a system service. That's it — no DNS config, no cert generation, no sudo.</p>
+
+  <h2>Add a project</h2>
+  <pre><code>cd ~/projects/myapp
+npx jumpsh add</code></pre>
+  <p>Your project is now available at <code>https://myapp.jump.sh</code></p>
+
+  <div class="highlight">
+    <h3>Built for AI agents</h3>
+    <p>
+      Coding agents need stable, predictable URLs to verify their work.
+      <code>localhost:3000</code> doesn't cut it when you're running multiple projects,
+      worktrees, or parallel agent sessions.
+    </p>
+    <p>
+      jump.sh gives every project and branch a permanent URL that agents can
+      screenshot, test, and verify — without port conflicts or manual setup.
+    </p>
+  </div>
+
+  <h2>How it runs projects</h2>
+
+  <h3>Docker Compose projects</h3>
+  <p>
+    If your project has a <code>docker-compose.yml</code>, jump.sh spins up containers
+    and proxies to them. Each project runs isolated with its own network.
+  </p>
+
+  <h3>Node.js projects</h3>
+  <p>
+    For projects with <code>package.json</code>, jump.sh runs your dev command
+    (<code>npm run dev</code>, <code>npm start</code>, etc.) and proxies to the dev server port.
+  </p>
+
+  <h3>Automatic port allocation</h3>
+  <p>
+    No more port conflicts. jump.sh allocates ports from a dedicated range (10000+) and
+    tracks them in a local database. Each project gets a stable port across restarts.
+  </p>
+
+  <h2>Git worktrees</h2>
+  <p>
+    Working on multiple branches? jump.sh auto-discovers <code>.worktrees/</code> directories
+    and gives each branch its own URL:
+  </p>
+  <pre><code>https://myapp.jump.sh           → main branch
+https://myapp--feature-x.jump.sh → .worktrees/feature-x</code></pre>
+  <p>
+    Run <code>jumpsh add</code> on the main project once. Worktrees are picked up automatically
+    via periodic scanning — no need to register each branch.
+  </p>
+
+  <div class="highlight">
+    <h3>Why worktrees matter for agents</h3>
+    <p>
+      When an agent works on a feature branch, it needs to test against <em>that branch</em>,
+      not whatever's running on the main project URL. Worktree URLs let agents verify
+      their changes in isolation without stepping on other work.
+    </p>
+    <p>
+      Supervisor agents can monitor multiple feature branches simultaneously,
+      each at a predictable URL derived from the branch name.
+    </p>
+  </div>
+
+  <h2>Commands</h2>
+  <ul>
+    <li><code>jumpsh add [path]</code> – Register a project</li>
+    <li><code>jumpsh ls</code> – List registered projects and status</li>
+    <li><code>jumpsh start &lt;name&gt;</code> – Start a project</li>
+    <li><code>jumpsh stop &lt;name&gt;</code> – Stop a project</li>
+    <li><code>jumpsh logs &lt;name&gt;</code> – Tail project logs</li>
+    <li><code>jumpsh remove &lt;name&gt;</code> – Unregister a project</li>
+    <li><code>jumpsh certs</code> – Download/refresh TLS certs</li>
+    <li><code>jumpsh install</code> – Install daemon service</li>
+    <li><code>jumpsh install --uninstall</code> – Remove daemon service</li>
+  </ul>
+
+  <h2>How it works</h2>
+  <p>
+    <code>*.jump.sh</code> resolves to <code>127.0.0.1</code> via public DNS — no local DNS setup needed.
+    The daemon runs on your machine, terminates TLS with a shared wildcard certificate,
+    and proxies requests to your dev servers based on subdomain.
+  </p>
+  <pre><code>Browser → https://myapp.jump.sh
+       → DNS: 127.0.0.1
+       → jumpsh daemon (TLS termination)
+       → localhost:10042 (your dev server)</code></pre>
+
+  <h2>Requirements</h2>
+  <ul>
+    <li>Node.js 18+</li>
+    <li>Docker (for containerized projects)</li>
+    <li>macOS or Linux</li>
+  </ul>
+
+  <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: #666; font-size: 0.9rem;">
+    <p><a href="https://github.com/davidguttman/jumpsh">GitHub</a></p>
+  </footer>
+</body>
+</html>
