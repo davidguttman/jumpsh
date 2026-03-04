@@ -6,11 +6,12 @@
   <title>jump.sh</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦘</text></svg>">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body>
   <%- include('partials/_header') %>
 
-  <main>
+  <main x-data="{ filter: '', sort: 'name' }">
     <% if (projects.length === 0) { %>
       <div class="empty-state">
         <h2>No projects yet</h2>
@@ -18,122 +19,145 @@
         <a href="/add" class="btn btn-primary">+ Add Project</a>
       </div>
     <% } else { %>
-      <div class="project-grid">
+      <% if (projects.length >= 4) { %>
+      <div class="controls-bar">
+        <input class="input controls-filter" type="text" placeholder="filter projects..." x-model="filter" autocapitalize="off">
+        <% if (projects.length >= 6) { %>
+        <select class="input controls-sort" x-model="sort" x-on:change="$nextTick(() => {
+          const list = $el.closest('main').querySelector('.project-list');
+          const rows = [...list.querySelectorAll('[data-project-name]')];
+          rows.sort((a, b) => {
+            if (sort === 'status') return (a.dataset.projectStatus || '').localeCompare(b.dataset.projectStatus || '');
+            return (a.dataset.projectName || '').localeCompare(b.dataset.projectName || '');
+          });
+          rows.forEach(row => {
+            list.appendChild(row);
+            const detail = row.nextElementSibling;
+            if (detail && detail.classList.contains('project-detail')) list.appendChild(detail);
+          });
+        })">
+          <option value="name">sort: name</option>
+          <option value="status">sort: status</option>
+        </select>
+        <% } %>
+      </div>
+      <% } %>
+      <div class="project-list">
         <% for (const project of projects) { %>
           <% const health = project.health || 'unknown'; %>
-          <div class="panel project-card <%= project.status %>">
-            <div class="project-header">
-              <h2><a href="/projects/<%= project.id %>"><%= project.name %></a></h2>
-              <a href="/projects/<%= project.id %>" class="nav-action detail-link">detail</a>
-            </div>
-
-
-            <div class="project-url">
+          <% const worktrees = worktreesByParent[project.id] || []; %>
+          <% const isExpanded = expandedName === project.name; %>
+          <div class="panel project-row <%= project.status %><%= isExpanded ? ' expanded' : '' %>" data-project-name="<%= project.name %>" data-project-status="<%= project.status %>" x-show="<%= isExpanded ? 'true || ' : '' %>!filter || '<%= project.name.toLowerCase() %>'.includes(filter.toLowerCase())">
+            <% if (isExpanded) { %>
+              <a href="/" class="expand-toggle" aria-label="Collapse <%= project.name %>">&#x25BC;</a>
+            <% } else { %>
+              <a href="/?expand=<%= encodeURIComponent(project.name) %>" class="expand-toggle" aria-label="Expand <%= project.name %>">&#x25B6;</a>
+            <% } %>
+            <span class="project-row-name"><%= project.name %></span>
+            <span class="project-row-url">
               <% if (health === 'healthy') { %>
-                <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank">
-                  <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
-                </a>
+                <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></a>
               <% } else { %>
                 <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
               <% } %>
-              <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
-            </div>
-
-            <% const worktrees = worktreesByParent[project.id] || []; %>
-            <% if (worktrees.length === 0) { %>
-              <p class="wt-hint">Place worktrees in <code>.worktrees/</code> to auto-discover</p>
-            <% } %>
+            </span>
+            <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
             <% if (worktrees.length > 0) { %>
-              <div class="worktrees">
-                <h4>Worktrees (<%= worktrees.length %>)</h4>
-                <ul>
-                  <% for (const wt of worktrees) { %>
-                    <% const wtHealth = wt.health || 'unknown'; %>
-                    <li class="<%= wt.status %>">
-                      <% if (wtHealth === 'healthy') { %>
-                        <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-branch-link"><%= wt.branch_name %></a>
-                      <% } else { %>
-                        <span class="wt-branch-name"><%= wt.branch_name %></span>
-                      <% } %>
-                      <%- include('partials/_action_btn', { id: wt.id, status: wt.status }) %>
-                    </li>
+              <span class="project-row-worktrees">
+                <% for (const wt of worktrees) { %>
+                  <% const wtHealth = wt.health || 'unknown'; %>
+                  <% if (wtHealth === 'healthy') { %>
+                    <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-chip"><%= wt.branch_name %></a>
+                  <% } else { %>
+                    <span class="wt-chip wt-chip-inactive"><%= wt.branch_name %></span>
                   <% } %>
-                </ul>
-              </div>
+                <% } %>
+              </span>
             <% } %>
           </div>
+          <% if (isExpanded && expandedProject) { %>
+            <div class="panel project-detail" x-show="true">
+              <%- include('partials/_project_detail', {
+                project: expandedProject,
+                worktrees: expandedProject.worktrees,
+                logs: expandedProject.logs,
+                detection: expandedProject.detection,
+                config: config
+              }) %>
+            </div>
+          <% } %>
         <% } %>
       </div>
     <% } %>
   </main>
 
   <script>
-    function subscribeStartup(id, btn) {
+    // Lightweight startup subscription for list-view action buttons
+    function _listSubscribeStartup(id, btn) {
       var es = new EventSource('/projects/' + id + '/startup');
       es.onmessage = function(e) {
         var data = JSON.parse(e.data);
         if (data.step && data.totalSteps) {
           btn.textContent = 'Step ' + data.step + '/' + data.totalSteps;
         }
-        if (data.done && !data.error) {
-          es.close();
-          location.reload();
-        }
-        if (data.error) {
-          es.close();
+        if (data.done && !data.error) { es.close(); location.reload(); }
+        if (data.error) { es.close(); btn.disabled = false; btn.textContent = 'Start'; }
+      };
+      es.onerror = function() { es.close(); setTimeout(function() { location.reload(); }, 2000); };
+    }
+
+    // List-view start/stop: use event.target for button feedback.
+    // The detail partial may define richer versions of startProject/stopProject;
+    // these only apply if the partial hasn't already defined them.
+    if (!window.startProject) {
+      window.startProject = async function(id) {
+        var btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Starting...';
+        _listSubscribeStartup(id, btn);
+        try {
+          var res = await fetch('/projects/' + id + '/start', { method: 'POST' });
+          if (!res.ok) {
+            var data = await res.json();
+            alert('Error: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = 'Start';
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
           btn.disabled = false;
           btn.textContent = 'Start';
         }
       };
-      es.onerror = function() {
-        es.close();
-        setTimeout(function() { location.reload(); }, 2000);
-      };
     }
 
-    async function startProject(id) {
-      const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = 'Starting...';
-
-      subscribeStartup(id, btn);
-
-      try {
-        const res = await fetch(`/projects/${id}/start`, { method: 'POST' });
-        if (!res.ok) {
-          const data = await res.json();
-          alert('Error: ' + data.error);
-          btn.disabled = false;
-          btn.textContent = 'Start';
-        }
-      } catch (err) {
-        alert('Error: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = 'Start';
-      }
-    }
-
-    async function stopProject(id) {
-      const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = 'Stopping...';
-
-      try {
-        const res = await fetch(`/projects/${id}/stop`, { method: 'POST' });
-        if (res.ok) {
-          location.reload();
-        } else {
-          const data = await res.json();
-          alert('Error: ' + data.error);
+    if (!window.stopProject) {
+      window.stopProject = async function(id) {
+        var btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Stopping...';
+        try {
+          var res = await fetch('/projects/' + id + '/stop', { method: 'POST' });
+          if (res.ok) { location.reload(); }
+          else {
+            var data = await res.json();
+            alert('Error: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = 'Stop';
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
           btn.disabled = false;
           btn.textContent = 'Stop';
         }
-      } catch (err) {
-        alert('Error: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = 'Stop';
-      }
+      };
     }
+
+    // Scroll expanded project into view
+    (function() {
+      var el = document.querySelector('.project-row.expanded');
+      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    })();
 
     // Auto-refresh every 30 seconds
     setTimeout(() => location.reload(), 30000);
@@ -143,7 +167,7 @@
       <% if (project.health === 'starting') { %>
     (function() {
       var btn = document.getElementById('project-btn-<%= project.id %>');
-      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; subscribeStartup('<%= project.id %>', btn); }
+      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; _listSubscribeStartup('<%= project.id %>', btn); }
     })();
       <% } %>
     <% } %>
@@ -152,7 +176,7 @@
         <% if (wt.health === 'starting') { %>
     (function() {
       var btn = document.getElementById('project-btn-<%= wt.id %>');
-      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; subscribeStartup('<%= wt.id %>', btn); }
+      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; _listSubscribeStartup('<%= wt.id %>', btn); }
     })();
         <% } %>
       <% } %>

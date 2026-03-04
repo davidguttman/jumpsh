@@ -150,9 +150,38 @@ app.get('/', async (req, res) => {
       worktreesByParent[p.parent_project_id].push(p);
     }
 
+    // Determine which project to expand
+    let expandName = req.query.expand || null;
+    // Auto-expand when there's only one project and no explicit expand param
+    if (!expandName && mainProjects.length === 1) {
+      expandName = mainProjects[0].name;
+    }
+
+    let expandedProject = null;
+    let expandedName = null;
+    if (expandName) {
+      const match = mainProjects.find(
+        p => p.name.toLowerCase() === expandName.toLowerCase()
+      );
+      if (match) {
+        expandedName = match.name;
+        const logs = await docker.getLogs(match, 200);
+        const detection = detectProjectType(match.path);
+        const worktrees = (worktreesByParent[match.id] || []);
+        expandedProject = {
+          ...match,
+          logs,
+          detection,
+          worktrees
+        };
+      }
+    }
+
     res.render('index', {
       projects: mainProjects,
       worktreesByParent,
+      expandedProject,
+      expandedName,
       config: req.requestConfig
     });
   });
@@ -224,44 +253,15 @@ app.post('/projects', (req, res) => {
   });
 });
 
-// Project detail
+// Project detail — redirect to unified listing with expand
 app.get('/projects/:id', (req, res) => {
   const { id } = req.params;
-  
-  db.getProject(id, async (err, project) => {
-    if (err) {
-      console.error(`Project detail DB error (id=${id}):`, err.message);
-      return res.status(500).send('Database error');
-    }
-    if (!project) {
+
+  db.getProject(id, (err, project) => {
+    if (err || !project) {
       return res.status(404).send('Project not found');
     }
-
-    const status = await docker.getStatus(project);
-    const port = status.running ? await docker.getPort(project) : null;
-    const health = docker.getHealthWithProbe(project, status);
-    const logs = await docker.getLogs(project, 200);
-    const detection = detectProjectType(project.path);
-
-    db.getWorktreesForProject(id, async (err, worktrees) => {
-      // Get status for worktrees too
-      const worktreesWithStatus = await Promise.all(
-        (worktrees || []).map(async (wt) => {
-          const wtStatus = await docker.getStatus(wt);
-          const wtPort = wtStatus.running ? await docker.getPort(wt) : null;
-          const wtHealth = docker.getHealthWithProbe(wt, wtStatus);
-          return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort, health: wtHealth };
-        })
-      );
-
-      res.render('project', {
-        project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
-        worktrees: worktreesWithStatus,
-        logs,
-        detection,
-        config: req.requestConfig
-      });
-    });
+    res.redirect(302, `/?expand=${encodeURIComponent(project.name)}`);
   });
 });
 
