@@ -258,9 +258,8 @@ app.get('/projects/:id', (req, res) => {
   const { id } = req.params;
 
   db.getProject(id, (err, project) => {
-    if (err || !project) {
-      return res.status(404).send('Project not found');
-    }
+    if (err) return res.status(500).send('Database error');
+    if (!project) return res.status(404).send('Project not found');
     res.redirect(302, `/?expand=${encodeURIComponent(project.name)}`);
   });
 });
