@@ -85,6 +85,11 @@
                 value="<%= project.override_docker_image || '' %>"
                 placeholder="<%= detection.dockerImage || 'auto-detect' %>">
             </div>
+            <div class="form-group">
+              <label class="label">Environment Overrides</label>
+              <div id="env-vars-container"></div>
+              <button type="button" class="btn btn-sm" id="add-env-var">+ Add Variable</button>
+            </div>
             <div class="settings-actions">
               <button class="btn" id="save-settings-btn" onclick="saveSettings()">Save</button>
               <span class="settings-feedback" id="settings-feedback"></span>
@@ -325,6 +330,47 @@
     activeLogId = projectId;
     startLogStream(projectId);
 
+    // --- Env vars management ---
+    var envVars = [];
+    try {
+      var raw = <%- JSON.stringify(project.override_env || '') %>;
+      if (raw) envVars = JSON.parse(raw);
+    } catch(e) {}
+
+    function escapeAttr(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function renderEnvVars() {
+      var container = document.getElementById('env-vars-container');
+      container.innerHTML = '';
+      for (var i = 0; i < envVars.length; i++) {
+        var row = document.createElement('div');
+        row.className = 'env-var-row';
+        row.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;';
+        row.innerHTML = '<input class="input" type="text" placeholder="KEY" value="' + escapeAttr(envVars[i].key) + '" data-idx="' + i + '" data-field="key" style="flex:1">' +
+          '<input class="input" type="text" placeholder="value" value="' + escapeAttr(envVars[i].value) + '" data-idx="' + i + '" data-field="value" style="flex:1">' +
+          '<button type="button" class="btn btn-sm" data-idx="' + i + '" style="padding:0.25rem 0.5rem">&times;</button>';
+        row.querySelectorAll('input').forEach(function(inp) {
+          inp.addEventListener('input', function() {
+            envVars[parseInt(this.dataset.idx)][this.dataset.field] = this.value;
+          });
+        });
+        row.querySelector('button').addEventListener('click', function() {
+          envVars.splice(parseInt(this.dataset.idx), 1);
+          renderEnvVars();
+        });
+        container.appendChild(row);
+      }
+    }
+
+    document.getElementById('add-env-var').addEventListener('click', function() {
+      envVars.push({ key: '', value: '' });
+      renderEnvVars();
+    });
+
+    renderEnvVars();
+
     function toggleSettings() {
       var panel = document.getElementById('settings-panel');
       var btn = document.getElementById('settings-toggle');
@@ -352,6 +398,8 @@
       }
       var portVal = document.getElementById('override_port').value.trim();
       body.override_port = portVal ? parseInt(portVal, 10) : null;
+      var filtered = envVars.filter(function(v) { return v.key.trim() !== ''; });
+      body.override_env = filtered.length ? JSON.stringify(filtered) : null;
 
       try {
         var res = await fetch('/api/projects/' + projectId, {

@@ -299,7 +299,7 @@ app.post('/projects/:id/start', (req, res) => {
 // Stop project
 app.post('/projects/:id/stop', (req, res) => {
   const { id } = req.params;
-  
+
   db.getProject(id, async (err, project) => {
     if (err || !project) {
       return res.status(404).json({ error: 'Project not found' });
@@ -308,9 +308,51 @@ app.post('/projects/:id/stop', (req, res) => {
     const result = await docker.stop(project);
     if (result.success) {
       res.json({ success: true });
+
+      // Auto-stop worktrees (fire-and-forget)
+      db.getWorktreesForProject(id, (err, worktrees) => {
+        if (err || !worktrees) return;
+        for (const wt of worktrees) {
+          docker.stop(wt);
+        }
+      });
     } else {
       res.status(500).json({ error: result.error });
     }
+  });
+});
+
+// Restart project
+app.post('/projects/:id/restart', (req, res) => {
+  const { id } = req.params;
+
+  db.getProject(id, async (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Gather worktrees
+    const worktrees = await new Promise((resolve) => {
+      db.getWorktreesForProject(id, (err, wts) => resolve(err ? [] : wts || []));
+    });
+
+    // Stop all (main + worktrees)
+    await Promise.all([project, ...worktrees].map(p => docker.stop(p)));
+
+    // Start all (main + worktrees)
+    const result = await docker.start(project);
+    if (!result.success) {
+      return res.status(500).json({ error: result.error, buildLog: result.buildLog || null });
+    }
+
+    // Fire-and-forget worktree starts
+    for (const wt of worktrees) {
+      docker.start(wt);
+    }
+
+    const status = await docker.getStatus(project);
+    const health = docker.getHealthWithProbe(project, status);
+    res.json({ success: true, status: result.status, health });
   });
 });
 
@@ -458,9 +500,26 @@ app.patch('/api/projects/:id', (req, res) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      db.getProject(id, (err, updated) => {
+      db.getProject(id, async (err, updated) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(updated);
+
+        // Auto-restart if container is running
+        const status = await docker.getStatus(updated);
+        if (status.running) {
+          docker.restart(updated);
+        }
+
+        // Also restart running worktrees (they inherit parent overrides)
+        if (!updated.is_worktree) {
+          db.getWorktreesForProject(id, async (err, worktrees) => {
+            if (err || !worktrees) return;
+            for (const wt of worktrees) {
+              const wtStatus = await docker.getStatus(wt);
+              if (wtStatus.running) docker.restart(wt);
+            }
+          });
+        }
       });
     });
   });

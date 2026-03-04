@@ -105,6 +105,7 @@ class Database {
       override_start_command: project.override_start_command || null,
       override_port: project.override_port || null,
       override_docker_image: project.override_docker_image || null,
+      override_env: project.override_env || null,
       created_at: now,
       updated_at: now,
     };
@@ -210,6 +211,7 @@ class Database {
         override_start_command: null,
         override_port: null,
         override_docker_image: null,
+        override_env: null,
         created_at: now,
         updated_at: now,
       });

@@ -30,6 +30,7 @@ export function generateCompose(projectPath, slug, detection, assignedPort, opts
     if (o.start) detection = { ...detection, devCommand: o.start };
     if (o.port) detection = { ...detection, port: o.port };
     if (o.dockerImage) detection = { ...detection, dockerImage: o.dockerImage };
+    if (o.env) detection = { ...detection, overrideEnv: o.env };
   }
   const jumpshDir = getJumpshDir(slug);
   const composePath = path.join(jumpshDir, 'docker-compose.yml');
@@ -246,6 +247,18 @@ services:
   if (detection.type === 'python') {
     envVars.push('      - PYTHONDONTWRITEBYTECODE=1');
     envVars.push('      - PYTHONUNBUFFERED=1');
+  }
+
+  // Add user override env vars (these take precedence over env_file)
+  if (detection.overrideEnv) {
+    try {
+      const userEnvVars = JSON.parse(detection.overrideEnv);
+      for (const { key, value } of userEnvVars) {
+        if (key && value !== undefined) {
+          envVars.push(`      - ${key}=${value}`);
+        }
+      }
+    } catch { /* ignore invalid JSON */ }
   }
 
   const envSection = envVars.length

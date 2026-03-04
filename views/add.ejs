@@ -65,6 +65,13 @@
             <input class="input" type="text" id="detect-docker-image" name="override_docker_image" autocapitalize="off" placeholder="—">
           </div>
 
+          <div class="form-group">
+            <label class="label">Environment Overrides</label>
+            <div id="env-vars-container"></div>
+            <button type="button" class="btn btn-sm" id="add-env-var">+ Add Variable</button>
+            <input type="hidden" id="override_env" name="override_env">
+          </div>
+
           <div class="form-actions">
             <a href="/" class="btn">Cancel</a>
             <button type="submit" class="btn btn-primary" id="submit-btn">Add Project</button>
@@ -144,6 +151,46 @@
           clearFieldError('name');
         });
 
+        // --- Env vars management ---
+        var envVars = [];
+
+        function renderEnvVars() {
+          var container = document.getElementById('env-vars-container');
+          container.innerHTML = '';
+          for (var i = 0; i < envVars.length; i++) {
+            var row = document.createElement('div');
+            row.className = 'env-var-row';
+            row.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;';
+            row.innerHTML = '<input class="input" type="text" placeholder="KEY" value="' + escapeAttr(envVars[i].key) + '" data-idx="' + i + '" data-field="key" style="flex:1">' +
+              '<input class="input" type="text" placeholder="value" value="' + escapeAttr(envVars[i].value) + '" data-idx="' + i + '" data-field="value" style="flex:1">' +
+              '<button type="button" class="btn btn-sm" data-idx="' + i + '" style="padding:0.25rem 0.5rem">&times;</button>';
+            row.querySelectorAll('input').forEach(function(inp) {
+              inp.addEventListener('input', function() {
+                envVars[parseInt(this.dataset.idx)][this.dataset.field] = this.value;
+              });
+            });
+            row.querySelector('button').addEventListener('click', function() {
+              envVars.splice(parseInt(this.dataset.idx), 1);
+              renderEnvVars();
+            });
+            container.appendChild(row);
+          }
+        }
+
+        function escapeAttr(s) {
+          return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        document.getElementById('add-env-var').addEventListener('click', function() {
+          envVars.push({ key: '', value: '' });
+          renderEnvVars();
+        });
+
+        function serializeEnvVars() {
+          var filtered = envVars.filter(function(v) { return v.key.trim() !== ''; });
+          document.getElementById('override_env').value = filtered.length ? JSON.stringify(filtered) : '';
+        }
+
         // --- Inline error helpers ---
         function clearAllErrors() {
           var formError = document.getElementById('form-error');
@@ -186,6 +233,7 @@
         document.getElementById('add-form').addEventListener('submit', function(e) {
           e.preventDefault();
           clearAllErrors();
+          serializeEnvVars();
 
           // Clear override fields that match detected defaults (no override needed)
           var installInput = document.getElementById('detect-install');

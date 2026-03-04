@@ -29,6 +29,19 @@ function getProjectSlug(project) {
   return project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
 }
 
+/** Merge parent and child env var JSON strings. Child values win. */
+function mergeEnvVars(parentJson, childJson) {
+  const map = new Map();
+  try {
+    if (parentJson) for (const { key, value } of JSON.parse(parentJson)) map.set(key, value);
+  } catch {}
+  try {
+    if (childJson) for (const { key, value } of JSON.parse(childJson)) map.set(key, value);
+  } catch {}
+  if (map.size === 0) return null;
+  return JSON.stringify([...map.entries()].map(([key, value]) => ({ key, value })));
+}
+
 /** Extract user overrides from a project record (null values are ignored). */
 function getOverrides(project) {
   const o = {};
@@ -36,7 +49,23 @@ function getOverrides(project) {
   if (project.override_start_command) o.start = project.override_start_command;
   if (project.override_port) o.port = project.override_port;
   if (project.override_docker_image) o.dockerImage = project.override_docker_image;
+  if (project._mergedEnv) o.env = project._mergedEnv;
+  else if (project.override_env) o.env = project.override_env;
   return Object.keys(o).length ? o : null;
+}
+
+/**
+ * For worktrees, inherit overrides from parent project when the worktree's own
+ * override is null. Returns a merged project-like object (does not mutate original).
+ */
+function mergeParentOverrides(project, parent) {
+  if (!parent) return project;
+  const fields = ['override_build_command', 'override_start_command', 'override_port', 'override_docker_image'];
+  const merged = { ...project };
+  for (const f of fields) {
+    if (merged[f] == null && parent[f] != null) merged[f] = parent[f];
+  }
+  return merged;
 }
 
 function saveBuildLog(slug, content) {
@@ -188,8 +217,29 @@ class DockerManager {
   }
 
   async _doStart(project) {
+    // For worktrees, inherit overrides from parent project
+    if (project.is_worktree && project.parent_project_id && this.db) {
+      const parent = await new Promise((resolve) => {
+        this.db.getProject(project.parent_project_id, (err, p) => resolve(err ? null : p));
+      });
+      project = mergeParentOverrides(project, parent);
+    }
+
     const { id, path: projectPath, name } = project;
     const slug = getProjectSlug(project);
+
+    // Worktrees inherit env overrides from parent, merged with their own
+    if (project.parent_project_id && this.db) {
+      try {
+        const parent = await new Promise((resolve, reject) => {
+          this.db.getProject(project.parent_project_id, (err, p) => err ? reject(err) : resolve(p));
+        });
+        if (parent) {
+          const merged = mergeEnvVars(parent.override_env, project.override_env);
+          if (merged) project._mergedEnv = merged;
+        }
+      } catch {}
+    }
 
     let { composePath, isGenerated } = this.getComposeFile(project);
 
