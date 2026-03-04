@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import pkg from './package.json' with { type: 'json' };
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -732,15 +733,17 @@ const dashboardUrl = formatUrl(config.dashboardHost);
 
 server.listen(config.port, () => {
   devinfo('Server started', { port: config.port, protocol, domain: config.domain });
-  const pad = (s, w = 41) => s + ' '.repeat(Math.max(0, w - s.length));
+  const pad = (s, w = 48) => s + ' '.repeat(Math.max(0, w - s.length));
+  const title = 'jump.sh v' + pkg.version;
+  const center = (s, w = 48) => { const l = Math.floor((w - s.length) / 2); return ' '.repeat(l) + s + ' '.repeat(Math.max(0, w - l - s.length)); };
   console.log(`
-╔═══════════════════════════════════════════╗
-║            jump.sh v0.1.0                 ║
-╠═══════════════════════════════════════════╣
+╔══════════════════════════════════════════════════╗
+║ ${center(title)} ║
+╠══════════════════════════════════════════════════╣
 ║ ${pad('Dashboard: ' + dashboardUrl)} ║
 ║ ${pad('Projects:  ' + formatUrl(`*.${config.domain}`))} ║
 ║ ${pad('Protocol:  ' + protocol.toUpperCase())} ║
-╚═══════════════════════════════════════════╝
+╚══════════════════════════════════════════════════╝
   `);
 
   // Start watching all projects for worktrees
