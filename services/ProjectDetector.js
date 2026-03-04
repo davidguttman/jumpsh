@@ -101,6 +101,22 @@ function detectPortFromScript(scriptContent) {
   return 3000;
 }
 
+/**
+ * Check if a dev/start script uses a tool that supports --host.
+ * Only returns true for known dev servers (vite, next, astro, nuxt, webpack-dev-server, etc.).
+ * Returns false for nodemon, plain node, ts-node, or unknown scripts.
+ */
+const HOST_SUPPORTING_TOOLS = [
+  'vite', 'next', 'astro', 'nuxt',
+  'webpack-dev-server', 'webpack serve',
+  'parcel', 'snowpack',
+];
+
+function scriptSupportsHost(scriptContent) {
+  if (!scriptContent) return false;
+  return HOST_SUPPORTING_TOOLS.some(tool => scriptContent.includes(tool));
+}
+
 function nodeDockerImage(pm) {
   return pm.name === 'bun' ? 'oven/bun:latest' : 'node:20-slim';
 }
@@ -121,7 +137,8 @@ function detectNode(projectPath) {
 
   // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
   if (scripts.dev && !scripts.dev.includes('vite')) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev -- --host`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    const hostFlag = scriptSupportsHost(scripts.dev) ? ' -- --host' : '';
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev${hostFlag}`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Framework detection (Astro before Vite since Astro uses Vite internally)
@@ -140,13 +157,15 @@ function detectNode(projectPath) {
 
   // Has a dev script
   if (scripts.dev) {
-    return { type: 'node', framework: null, devCommand: `${pm.run} dev -- --host`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    const hostFlag = scriptSupportsHost(scripts.dev) ? ' -- --host' : '';
+    return { type: 'node', framework: null, devCommand: `${pm.run} dev${hostFlag}`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Has a start script
   if (scripts.start) {
     const startCmd = pm.name === 'yarn' ? 'yarn start' : `${pm.run} start`;
-    return { type: 'node', framework: null, devCommand: `${startCmd} -- --host`, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install, dockerImage: image };
+    const hostFlag = scriptSupportsHost(scripts.start) ? ' -- --host' : '';
+    return { type: 'node', framework: null, devCommand: `${startCmd}${hostFlag}`, port: detectPortFromScript(scripts.start), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Fallback: find entrypoint
