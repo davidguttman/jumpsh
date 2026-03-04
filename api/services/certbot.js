@@ -22,7 +22,7 @@ export async function provisionCert (username) {
 function runCertbot (domain) {
   return new Promise((resolve, reject) => {
     const credsFile = process.env.GOOGLE_APPLICATION_CREDENTIALS || '/tmp/gcp-creds.json'
-
+    
     const args = [
       'certonly',
       '--dns-google',
