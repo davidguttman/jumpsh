@@ -88,6 +88,7 @@ function detectPortFromScript(scriptContent) {
     'esbuild --serve': 8000,
     'live-server': 8080,
     'http-server': 8080,
+    'eleventy': 8080,
     'serve': 3000,
     'nodemon': 3000,
     'ts-node': 3000,
@@ -136,12 +137,16 @@ function detectNode(projectPath) {
   const image = nodeDockerImage(pm);
 
   // If project has an explicit dev script that is NOT vite, trust it over dependency heuristics.
-  if (scripts.dev && !scripts.dev.includes('vite')) {
+  if (scripts.dev && !scripts.dev.includes('vite') && !deps['@11ty/eleventy']) {
     const hostFlag = scriptSupportsHost(scripts.dev) ? ' -- --host' : '';
     return { type: 'node', framework: null, devCommand: `${pm.run} dev${hostFlag}`, port: detectPortFromScript(scripts.dev), packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
 
   // Framework detection (Astro before Vite since Astro uses Vite internally)
+  if (deps['@11ty/eleventy']) {
+    const devCmd = scripts.dev ? `${pm.run} dev` : `npx @11ty/eleventy --serve`;
+    return { type: 'node', framework: 'eleventy', devCommand: devCmd, port: 8080, packageManager: pm, installCommand: pm.install, dockerImage: image };
+  }
   if (deps.astro) {
     return { type: 'node', framework: 'astro', devCommand: `${pm.run} dev -- --host`, port: 4321, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
