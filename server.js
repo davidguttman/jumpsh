@@ -904,6 +904,7 @@ server.listen(config.port, async () => {
   }
 
   if (devMode) {
+    await db.ready();
     await initDevMode();
   }
 

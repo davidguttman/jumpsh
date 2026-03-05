@@ -1,10 +1,12 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import MockDockerManager from '../services/MockDockerManager.js';
 import SubdomainProxy from '../services/SubdomainProxy.js';
+import Database from '../database.js';
 import { createMockDb } from './helpers/mock-db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,6 +86,46 @@ describe('Fixture loading', () => {
       mockDb.getProjectByName('fixture-python-fastapi', (err, p) => resolve(p));
     });
     assert.ok(existing, 'Should find existing project by name');
+  });
+});
+
+// ---- db.ready() race condition regression ----
+
+describe('initDevMode db readiness', () => {
+  it('db methods fail before ready() resolves', () => {
+    // Simulate the race: construct a Database (lowdb not yet loaded)
+    // and immediately try to call a method that reads this.db.data
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-dbrace-'));
+    const origEnv = process.env.HOME;
+    process.env.HOME = tmpDir;
+    try {
+      const db = new Database();
+      // Before ready(), this.db is undefined — calling getProjectByPath should throw
+      assert.throws(() => {
+        db.getProjectByPath('/some/path', () => {});
+      }, /Cannot read properties of undefined/);
+    } finally {
+      process.env.HOME = origEnv;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('db methods work after ready() resolves', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-dbrace-'));
+    const origEnv = process.env.HOME;
+    process.env.HOME = tmpDir;
+    try {
+      const db = new Database();
+      await db.ready();
+      // After ready(), this should not throw
+      const result = await new Promise(resolve => {
+        db.getProjectByPath('/nonexistent', (err, p) => resolve(p));
+      });
+      assert.equal(result, null);
+    } finally {
+      process.env.HOME = origEnv;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 
