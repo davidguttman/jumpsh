@@ -22,7 +22,7 @@ export function detectProjectType(projectPath) {
     return { error: `Invalid project path: ${e.message}` };
   }
 
-  // Detection priority: package.json > requirements.txt > pyproject.toml > Gemfile > go.mod
+  // Detection priority: package.json > requirements.txt > pyproject.toml > Gemfile > go.mod > composer.json > *.php
   if (fs.existsSync(path.join(projectPath, 'package.json'))) {
     return detectNode(projectPath);
   }
@@ -37,6 +37,12 @@ export function detectProjectType(projectPath) {
   }
   if (fs.existsSync(path.join(projectPath, 'go.mod'))) {
     return { type: 'go', framework: null, devCommand: 'go run .', port: 8080, dockerImage: 'golang:1.22-alpine' };
+  }
+  if (fs.existsSync(path.join(projectPath, 'composer.json'))) {
+    return detectPhp(projectPath);
+  }
+  if (hasPhpFiles(projectPath)) {
+    return detectPhp(projectPath);
   }
 
   // Fallback: static site (index.html with no recognizable project markers)
@@ -307,6 +313,45 @@ function detectRuby(projectPath) {
   }
 
   return { type: 'ruby', framework: null, devCommand: 'bundle exec ruby app.rb', port: 4567, installCommand: 'bundle install', dockerImage: rubyImage };
+}
+
+// ---- PHP detection ----
+
+function hasPhpFiles(projectPath) {
+  try {
+    const entries = fs.readdirSync(projectPath);
+    return entries.some(f => f.endsWith('.php'));
+  } catch { return false; }
+}
+
+function detectPhpExtensions(projectPath) {
+  try {
+    const composer = JSON.parse(fs.readFileSync(path.join(projectPath, 'composer.json'), 'utf8'));
+    const require = { ...composer.require, ...composer['require-dev'] };
+    return Object.keys(require)
+      .filter(dep => dep.startsWith('ext-'))
+      .map(dep => dep.replace('ext-', ''));
+  } catch { return []; }
+}
+
+function detectPhp(projectPath) {
+  const type = 'php';
+  const phpImage = 'php:8.3-cli';
+  const extensions = detectPhpExtensions(projectPath);
+
+  // Laravel: has artisan file
+  if (fs.existsSync(path.join(projectPath, 'artisan'))) {
+    return { type, framework: 'laravel', devCommand: 'php artisan serve --host=0.0.0.0 --port=8000', port: 8000, installCommand: 'composer install', dockerImage: phpImage, phpExtensions: extensions };
+  }
+
+  // Symfony: has symfony.lock or config/bundles.php
+  if (fs.existsSync(path.join(projectPath, 'symfony.lock')) || fs.existsSync(path.join(projectPath, 'config', 'bundles.php'))) {
+    return { type, framework: 'symfony', devCommand: 'php -S 0.0.0.0:8000 -t public', port: 8000, installCommand: 'composer install', dockerImage: phpImage, phpExtensions: extensions };
+  }
+
+  // Plain PHP
+  const hasComposer = fs.existsSync(path.join(projectPath, 'composer.json'));
+  return { type, framework: null, devCommand: 'php -S 0.0.0.0:8000', port: 8000, installCommand: hasComposer ? 'composer install' : null, dockerImage: phpImage, phpExtensions: extensions };
 }
 
 // ---- Static site detection ----

@@ -411,3 +411,67 @@ describe('ProjectDetector error handling', () => {
     assert.match(r.error, /does not exist/);
   });
 });
+
+// ---- PHP detection ----
+
+describe('ProjectDetector PHP detection', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = makeTmpDir(); });
+  afterEach(() => { cleanTmpDir(tmpDir); });
+
+  it('detects Laravel project', () => {
+    writeJson(tmpDir, 'composer.json', { require: { 'laravel/framework': '^11.0' } });
+    fs.writeFileSync(path.join(tmpDir, 'artisan'), '#!/usr/bin/env php');
+    const result = detectProjectType(tmpDir);
+    assert.equal(result.type, 'php');
+    assert.equal(result.framework, 'laravel');
+    assert.match(result.devCommand, /artisan serve/);
+    assert.equal(result.port, 8000);
+  });
+
+  it('detects Symfony project via symfony.lock', () => {
+    writeJson(tmpDir, 'composer.json', { require: { 'symfony/framework-bundle': '^7.0' } });
+    fs.writeFileSync(path.join(tmpDir, 'symfony.lock'), '{}');
+    const result = detectProjectType(tmpDir);
+    assert.equal(result.type, 'php');
+    assert.equal(result.framework, 'symfony');
+    assert.match(result.devCommand, /php -S.*public/);
+    assert.equal(result.port, 8000);
+  });
+
+  it('detects Symfony project via config/bundles.php', () => {
+    writeJson(tmpDir, 'composer.json', { require: {} });
+    fs.mkdirSync(path.join(tmpDir, 'config'));
+    fs.writeFileSync(path.join(tmpDir, 'config', 'bundles.php'), '<?php return [];');
+    const result = detectProjectType(tmpDir);
+    assert.equal(result.type, 'php');
+    assert.equal(result.framework, 'symfony');
+  });
+
+  it('detects plain PHP with composer.json', () => {
+    writeJson(tmpDir, 'composer.json', { require: {} });
+    const result = detectProjectType(tmpDir);
+    assert.equal(result.type, 'php');
+    assert.equal(result.framework, null);
+    assert.match(result.devCommand, /php -S/);
+    assert.equal(result.port, 8000);
+    assert.equal(result.installCommand, 'composer install');
+  });
+
+  it('detects plain PHP files without composer.json', () => {
+    fs.writeFileSync(path.join(tmpDir, 'index.php'), '<?php echo "hi";');
+    const result = detectProjectType(tmpDir);
+    assert.equal(result.type, 'php');
+    assert.equal(result.framework, null);
+    assert.equal(result.installCommand, null);
+  });
+
+  it('extracts PHP extensions from composer.json', () => {
+    writeJson(tmpDir, 'composer.json', {
+      require: { 'ext-pdo': '*', 'ext-mbstring': '*', 'laravel/framework': '^11.0' },
+    });
+    fs.writeFileSync(path.join(tmpDir, 'artisan'), '#!/usr/bin/env php');
+    const result = detectProjectType(tmpDir);
+    assert.deepEqual(result.phpExtensions, ['pdo', 'mbstring']);
+  });
+});
