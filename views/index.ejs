@@ -30,11 +30,7 @@
             if (sort === 'status') return (a.dataset.projectStatus || '').localeCompare(b.dataset.projectStatus || '');
             return (a.dataset.projectName || '').localeCompare(b.dataset.projectName || '');
           });
-          rows.forEach(row => {
-            list.appendChild(row);
-            const detail = row.nextElementSibling;
-            if (detail && detail.classList.contains('project-detail')) list.appendChild(detail);
-          });
+          rows.forEach(row => list.appendChild(row));
         })">
           <option value="name">sort: name</option>
           <option value="status">sort: status</option>
@@ -74,18 +70,18 @@
                 <% } %>
               </span>
             <% } %>
+            <% if (isExpanded && expandedProject) { %>
+              <div class="project-row-detail">
+                <%- include('partials/_project_detail', {
+                  project: expandedProject,
+                  worktrees: expandedProject.worktrees,
+                  logs: expandedProject.logs,
+                  detection: expandedProject.detection,
+                  config: config
+                }) %>
+              </div>
+            <% } %>
           </div>
-          <% if (isExpanded && expandedProject) { %>
-            <div class="panel project-detail" x-show="true">
-              <%- include('partials/_project_detail', {
-                project: expandedProject,
-                worktrees: expandedProject.worktrees,
-                logs: expandedProject.logs,
-                detection: expandedProject.detection,
-                config: config
-              }) %>
-            </div>
-          <% } %>
         <% } %>
       </div>
     <% } %>
