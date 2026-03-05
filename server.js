@@ -811,7 +811,17 @@ rotationTimer.unref();
 const protocol = config.https ? 'https' : 'http';
 const dashboardUrl = formatUrl(config.dashboardHost);
 
+const serverJsonPath = path.join(os.homedir(), '.jump.sh', 'server.json');
+
 server.listen(config.port, () => {
+  // Write server.json so the CLI can discover the actual port
+  try {
+    fs.mkdirSync(path.dirname(serverJsonPath), { recursive: true });
+    fs.writeFileSync(serverJsonPath, JSON.stringify({ port: config.port, protocol }));
+  } catch (err) {
+    console.warn('Could not write server.json:', err.message);
+  }
+
   devinfo('Server started', { port: config.port, protocol, domain: config.domain });
   const pad = (s, w = 48) => s + ' '.repeat(Math.max(0, w - s.length));
   const title = 'jump.sh v' + pkg.version;
@@ -850,6 +860,9 @@ async function shutdown(signal) {
   forceTimer.unref();
 
   try {
+    // Remove server.json so CLI knows the server is not running
+    try { fs.unlinkSync(serverJsonPath); } catch {}
+
     server.close();
 
     // Stop all running Docker containers
