@@ -1243,3 +1243,29 @@ main {
     margin-right: 0.5rem;
   }
 }
+
+/* Dev mode banner */
+.dev-mode-banner {
+  background: #e8a735;
+  color: #1a1c28;
+  text-align: center;
+  padding: 0.35rem 1rem;
+  font-family: var(--font-pixel), 'Silkscreen', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* Fixture badge */
+.badge-fixture {
+  display: inline-block;
+  background: #444;
+  color: #ccc;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  font-family: var(--font-pixel), 'Silkscreen', monospace;
+  letter-spacing: 0.03em;
+}

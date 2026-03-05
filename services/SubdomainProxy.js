@@ -1,4 +1,13 @@
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { detectProjectType } from './ProjectDetector.js';
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 class SubdomainProxy {
   constructor(db, docker, config) {
@@ -49,6 +58,28 @@ class SubdomainProxy {
               </body>
             </html>
           `);
+        }
+
+        // Mock container: serve placeholder instead of proxying
+        if (this.docker.isMock) {
+          let detection = {};
+          try { detection = detectProjectType(project.path); } catch {}
+          const name = escapeHtml(project.name);
+          const type = escapeHtml(detection.type || 'unknown');
+          const framework = escapeHtml(detection.framework || 'none');
+          const projPath = escapeHtml(project.path);
+          return res.send(`<!DOCTYPE html>
+<html><head><title>${name} - Mock</title></head>
+<body style="font-family: system-ui; padding: 2rem; max-width: 600px; margin: 0 auto;">
+  <h1>${name}</h1>
+  <p><strong>Mock container running</strong> (dev mode)</p>
+  <table style="border-collapse: collapse;">
+    <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Type</td><td>${type}</td></tr>
+    <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Framework</td><td>${framework}</td></tr>
+    <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Path</td><td><code>${projPath}</code></td></tr>
+    <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Port</td><td>${port}</td></tr>
+  </table>
+</body></html>`);
         }
 
         // Get or create proxy for this port

@@ -12,6 +12,7 @@ import os from 'os';
 import net from 'net';
 import Database from './database.js';
 import DockerManager from './services/DockerManager.js';
+import MockDockerManager from './services/MockDockerManager.js';
 import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { detectProjectType } from './services/ProjectDetector.js';
@@ -93,9 +94,13 @@ function formatUrl(host, pathStr = '') {
 }
 config.formatUrl = formatUrl;
 
+// Dev mode: explicit opt-in only (JUMPSH_DEV_MODE=true|1, case-insensitive)
+const devMode = /^(true|1)$/i.test(process.env.JUMPSH_DEV_MODE || '');
+config.devMode = devMode;
+
 // Initialize services
 const db = new Database();
-const docker = new DockerManager(db);
+const docker = devMode ? new MockDockerManager(db) : new DockerManager(db);
 const worktreeScanner = new WorktreeScanner(db, docker);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
 
@@ -843,7 +848,53 @@ const dashboardUrl = formatUrl(config.dashboardHost);
 
 const serverJsonPath = path.join(os.homedir(), '.jump.sh', 'server.json');
 
-server.listen(config.port, () => {
+async function initDevMode() {
+  const fixturesDir = path.join(__dirname, 'test/fixtures/apps');
+  let entries;
+  try {
+    entries = fs.readdirSync(fixturesDir);
+  } catch (err) {
+    console.warn('[dev] Could not read fixtures directory:', err.message);
+    return;
+  }
+
+  let loaded = 0;
+  for (const name of entries) {
+    const fixturePath = path.join(fixturesDir, name);
+    try {
+      if (!fs.statSync(fixturePath).isDirectory()) continue;
+    } catch { continue; }
+
+    // Idempotent: skip if already registered by path or name
+    const existingByPath = await new Promise(resolve => {
+      db.getProjectByPath(fixturePath, (err, p) => resolve(p));
+    });
+    if (existingByPath) { loaded++; continue; }
+
+    const projectName = `fixture-${name}`;
+    const existingByName = await new Promise(resolve => {
+      db.getProjectByName(projectName, (err, p) => resolve(p));
+    });
+    if (existingByName) { loaded++; continue; }
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.createProject({
+          name: projectName,
+          path: fixturePath,
+          description: '[fixture] Test fixture app',
+        }, (err) => err ? reject(err) : resolve());
+      });
+      loaded++;
+    } catch (err) {
+      console.error(`[dev] Failed to load fixture ${name}:`, err.message);
+    }
+  }
+
+  console.log(`[dev] ${loaded} fixture apps ready`);
+}
+
+server.listen(config.port, async () => {
   // Write server.json so the CLI can discover the actual port
   try {
     fs.mkdirSync(path.dirname(serverJsonPath), { recursive: true });
@@ -852,9 +903,13 @@ server.listen(config.port, () => {
     console.warn('Could not write server.json:', err.message);
   }
 
-  devinfo('Server started', { port: config.port, protocol, domain: config.domain });
+  if (devMode) {
+    await initDevMode();
+  }
+
+  devinfo('Server started', { port: config.port, protocol, domain: config.domain, devMode });
   const pad = (s, w = 48) => s + ' '.repeat(Math.max(0, w - s.length));
-  const title = 'jump.sh v' + pkg.version;
+  const title = 'jump.sh v' + pkg.version + (devMode ? ' [DEV MODE]' : '');
   const center = (s, w = 48) => { const l = Math.floor((w - s.length) / 2); return ' '.repeat(l) + s + ' '.repeat(Math.max(0, w - l - s.length)); };
   console.log(`
 ╔══════════════════════════════════════════════════╗

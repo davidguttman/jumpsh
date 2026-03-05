@@ -24,6 +24,10 @@ export function createMockDb(initialProjects = []) {
       track('getProjectByName', [name]);
       cb(null, projects.find(p => p.name === name && !p.is_worktree) || null);
     },
+    getProjectByPath(projectPath, cb) {
+      track('getProjectByPath', [projectPath]);
+      cb(null, projects.find(p => p.path === projectPath) || null);
+    },
     getAllProjects(cb) {
       track('getAllProjects', []);
       cb(null, projects.filter(p => !p.is_worktree).sort((a, b) => a.name.localeCompare(b.name)));

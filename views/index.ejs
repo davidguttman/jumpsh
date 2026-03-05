@@ -11,19 +11,9 @@
 <body>
   <%- include('partials/_header') %>
 
-  <div class="docker-warning" x-data="{ dockerAvailable: true }" x-init="
-    async function checkDockerStatus() {
-      try {
-        const res = await fetch('/api/docker-status');
-        const data = await res.json();
-        dockerAvailable = data.available;
-      } catch {}
-    }
-    checkDockerStatus();
-    setInterval(checkDockerStatus, 30000);
-  " x-show="!dockerAvailable" x-cloak>
-    ⚠️ Docker not detected — start Docker to launch projects
-  </div>
+  <% if (config.devMode) { %>
+  <div class="dev-mode-banner">DEV MODE &mdash; Using mock containers</div>
+  <% } %>
 
   <main x-data="projectList()" x-init="init()">
     <% if (projects.length === 0) { %>
@@ -67,6 +57,9 @@
                  x-html="expanded === '<%= project.name %>' ? '&#x25BC;' : '&#x25B6;'"></a>
             <% } %>
             <span class="project-row-name"><%= project.name %></span>
+            <% if (project.name.startsWith('fixture-')) { %>
+              <span class="badge badge-fixture">fixture</span>
+            <% } %>
             <span class="project-row-url">
               <% if (health === 'healthy') { %>
                 <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></a>
@@ -74,6 +67,7 @@
                 <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
               <% } %>
             </span>
+            <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
             <% if (worktrees.length > 0) { %>
               <span class="project-row-worktrees">
                 <% for (const wt of worktrees) { %>
@@ -86,7 +80,6 @@
                 <% } %>
               </span>
             <% } %>
-            <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
             <div class="project-row-detail"
                  x-show="expanded === '<%= project.name %>'"
                  x-html="detailCache['<%= project.name %>'] || ''">
