@@ -21,6 +21,21 @@ export function isDockerAvailable() {
 }
 
 /**
+ * Check if docker daemon is reachable (fresh check, bypasses cache).
+ * @returns {Promise<{ available: boolean, error?: string }>}
+ */
+export async function checkDockerAvailability() {
+  try {
+    await execFileAsync('docker', ['info'], { timeout: 5000 });
+    _dockerAvailable = true;
+    return { available: true };
+  } catch (err) {
+    _dockerAvailable = false;
+    return { available: false, error: err.message };
+  }
+}
+
+/**
  * Require Docker to be available. If not, prints an error and exits with code 5.
  */
 export function requireDocker() {

@@ -10,6 +10,10 @@
 <body>
   <%- include('partials/_header') %>
 
+  <div id="docker-warning" class="docker-warning" style="display: none;">
+    ⚠️ Docker not detected — start Docker to launch projects
+  </div>
+
   <main>
     <% if (projects.length === 0) { %>
       <div class="empty-state">
@@ -134,6 +138,22 @@
         btn.textContent = 'Stop';
       }
     }
+
+    // Docker status polling
+    async function checkDockerStatus() {
+      try {
+        const res = await fetch('/api/docker-status');
+        const data = await res.json();
+        const banner = document.getElementById('docker-warning');
+        if (data.available) {
+          banner.style.display = 'none';
+        } else {
+          banner.style.display = 'block';
+        }
+      } catch {}
+    }
+    checkDockerStatus();
+    setInterval(checkDockerStatus, 30000);
 
     // Auto-refresh every 30 seconds
     setTimeout(() => location.reload(), 30000);

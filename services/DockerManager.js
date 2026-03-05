@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import net from 'net';
-import { execCompose, buildComposeSpawn } from './dockerCommand.js';
+import { execCompose, buildComposeSpawn, checkDockerAvailability } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
 import { generateCompose, getJumpshDir } from './ComposeGenerator.js';
 import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
@@ -217,6 +217,12 @@ class DockerManager {
   }
 
   async _doStart(project) {
+    // Check Docker availability before attempting anything
+    const dockerCheck = await checkDockerAvailability();
+    if (!dockerCheck.available) {
+      return { success: false, error: 'Docker is not running. Please start Docker and try again.' };
+    }
+
     // For worktrees, inherit overrides from parent project
     if (project.is_worktree && project.parent_project_id && this.db) {
       const parent = await new Promise((resolve) => {

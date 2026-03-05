@@ -18,6 +18,7 @@ import { detectProjectType } from './services/ProjectDetector.js';
 import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
+import { checkDockerAvailability } from './services/dockerCommand.js';
 
 dotenv.config({ quiet: true });
 
@@ -625,6 +626,13 @@ app.get('/api/browse', (req, res) => {
     }
     res.status(500).json({ error: err.message });
   }
+});
+
+// ============ Docker Status API ============
+
+app.get('/api/docker-status', async (req, res) => {
+  const result = await checkDockerAvailability();
+  res.json(result);
 });
 
 // ============ Port Conflict Detection ============
