@@ -94,8 +94,8 @@
 
         init() {
           // Read initial expand from server-side or URL
-          var initialExpand = <%= JSON.stringify(expandName) %>;
-          var singleProject = <%= projects.length === 1 ? JSON.stringify(projects[0].name) : 'null' %>;
+          var initialExpand = <%- JSON.stringify(expandName) %>;
+          var singleProject = <%- projects.length === 1 ? JSON.stringify(projects[0].name) : 'null' %>;
           var projectIds = <%- JSON.stringify(projects.reduce(function(m, p) { m[p.name] = p.id; return m; }, {})) %>;
           this._projectIds = projectIds;
           this._singleProject = singleProject;
