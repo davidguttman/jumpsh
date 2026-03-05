@@ -145,10 +145,13 @@
         const res = await fetch('/api/docker-status');
         const data = await res.json();
         const banner = document.getElementById('docker-warning');
+        const startBtns = document.querySelectorAll('.btn-success');
         if (data.available) {
           banner.style.display = 'none';
+          startBtns.forEach(btn => { btn.disabled = false; });
         } else {
           banner.style.display = 'block';
+          startBtns.forEach(btn => { btn.disabled = true; });
         }
       } catch {}
     }

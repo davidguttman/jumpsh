@@ -204,6 +204,11 @@ main {
   color: var(--accent-green);
 }
 
+.btn-success:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn-danger {
   color: var(--accent-red);
 }
