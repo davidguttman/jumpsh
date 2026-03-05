@@ -90,8 +90,9 @@ function readBuildLog(slug) {
 }
 
 class DockerManager {
-  constructor(db) {
+  constructor(db, { spawner = spawn } = {}) {
     this.db = db;
+    this.spawner = spawner;
     this.healthStates = new Map(); // projectId -> 'unknown' | 'starting' | 'healthy' | 'unhealthy'
     this.startupListeners = new Map(); // projectId -> Set<callback>
     this.startupSteps = new Map(); // projectId -> current step data
@@ -141,7 +142,7 @@ class DockerManager {
   _execComposeStreaming(args, composePath, opts, projectId) {
     return new Promise((resolve, reject) => {
       const { command, args: spawnArgs } = buildComposeSpawn(args, composePath);
-      const child = spawn(command, spawnArgs, { cwd: opts.cwd });
+      const child = this.spawner(command, spawnArgs, { cwd: opts.cwd });
       let stdout = '';
       let stderr = '';
       let currentStep = 1;
@@ -536,7 +537,7 @@ class DockerManager {
     });
 
     const { command, args } = buildComposeSpawn(['logs', '-f', '--no-color'], composePath);
-    const child = spawn(command, args, { cwd: projectPath });
+    const child = this.spawner(command, args, { cwd: projectPath });
 
     child.stdout.on('data', (data) => {
       const lines = data.toString().split('\n');
