@@ -44,10 +44,12 @@
           <% const worktrees = worktreesByParent[project.id] || []; %>
           <% const isExpanded = expandedName === project.name; %>
           <div class="panel project-row <%= project.status %><%= isExpanded ? ' expanded' : '' %>" data-project-name="<%= project.name %>" data-project-status="<%= project.status %>" x-show="<%= isExpanded ? 'true || ' : '' %>!filter || '<%= project.name.toLowerCase() %>'.includes(filter.toLowerCase())">
-            <% if (isExpanded) { %>
-              <a href="/" class="expand-toggle" aria-label="Collapse <%= project.name %>">&#x25BC;</a>
-            <% } else { %>
-              <a href="/?expand=<%= encodeURIComponent(project.name) %>" class="expand-toggle" aria-label="Expand <%= project.name %>">&#x25B6;</a>
+            <% if (projects.length > 1) { %>
+              <% if (isExpanded) { %>
+                <a href="/" class="expand-toggle" aria-label="Collapse <%= project.name %>">&#x25BC;</a>
+              <% } else { %>
+                <a href="/?expand=<%= encodeURIComponent(project.name) %>" class="expand-toggle" aria-label="Expand <%= project.name %>">&#x25B6;</a>
+              <% } %>
             <% } %>
             <span class="project-row-name"><%= project.name %></span>
             <span class="project-row-url">
