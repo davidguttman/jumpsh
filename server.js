@@ -151,9 +151,13 @@ app.get('/', async (req, res) => {
       worktreesByParent[p.parent_project_id].push(p);
     }
 
+    // Pass expandName for client-side auto-expand on load
+    const expandName = req.query.expand || null;
+
     res.render('index', {
       projects: mainProjects,
       worktreesByParent,
+      expandName,
       config: req.requestConfig
     });
   });
@@ -225,44 +229,53 @@ app.post('/projects', (req, res) => {
   });
 });
 
-// Project detail
-app.get('/projects/:id', (req, res) => {
+// Project detail partial — returns rendered HTML fragment for AJAX expand
+app.get('/projects/:id/detail-partial', (req, res) => {
   const { id } = req.params;
-  
+
   db.getProject(id, async (err, project) => {
-    if (err) {
-      console.error(`Project detail DB error (id=${id}):`, err.message);
-      return res.status(500).send('Database error');
-    }
-    if (!project) {
-      return res.status(404).send('Project not found');
-    }
+    if (err) return res.status(500).send('Database error');
+    if (!project) return res.status(404).send('Project not found');
 
     const status = await docker.getStatus(project);
     const port = status.running ? await docker.getPort(project) : null;
     const health = docker.getHealthWithProbe(project, status);
-    const logs = await docker.getLogs(project, 200);
-    const detection = detectProjectType(project.path);
+    const enriched = { ...project, status: status.running ? 'running' : 'stopped', port, health };
 
-    db.getWorktreesForProject(id, async (err, worktrees) => {
-      // Get status for worktrees too
-      const worktreesWithStatus = await Promise.all(
-        (worktrees || []).map(async (wt) => {
+    const logs = await docker.getLogs(enriched, 200);
+    const detection = detectProjectType(enriched.path);
+
+    const worktrees = await new Promise((resolve) => {
+      db.getWorktreesForProject(id, async (wtErr, wts) => {
+        if (wtErr || !wts) return resolve([]);
+        const enrichedWts = await Promise.all(wts.map(async (wt) => {
           const wtStatus = await docker.getStatus(wt);
           const wtPort = wtStatus.running ? await docker.getPort(wt) : null;
           const wtHealth = docker.getHealthWithProbe(wt, wtStatus);
           return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort, health: wtHealth };
-        })
-      );
-
-      res.render('project', {
-        project: { ...project, status: status.running ? 'running' : 'stopped', port, health },
-        worktrees: worktreesWithStatus,
-        logs,
-        detection,
-        config: req.requestConfig
+        }));
+        resolve(enrichedWts);
       });
     });
+
+    res.render('partials/_detail_fragment', {
+      project: enriched,
+      worktrees,
+      logs,
+      detection,
+      config: req.requestConfig
+    });
+  });
+});
+
+// Project detail — redirect to unified listing with expand
+app.get('/projects/:id', (req, res) => {
+  const { id } = req.params;
+
+  db.getProject(id, (err, project) => {
+    if (err) return res.status(500).send('Database error');
+    if (!project) return res.status(404).send('Project not found');
+    res.redirect(302, `/?expand=${encodeURIComponent(project.name)}`);
   });
 });
 
