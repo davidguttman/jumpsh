@@ -239,7 +239,7 @@ services:
     volumes.push('      - /app/node_modules');
   }
 
-  const envVars = [];
+  const envVars = [`      - PORT=${internalPort}`];
   if (detection.type === 'node') {
     envVars.push('      - NODE_ENV=development');
     envVars.push('      - HOST=0.0.0.0');
