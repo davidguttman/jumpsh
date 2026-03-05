@@ -11,7 +11,7 @@
 <body>
   <%- include('partials/_header') %>
 
-  <main x-data="{ filter: '', sort: 'name' }">
+  <main x-data="projectList()" x-init="init()">
     <% if (projects.length === 0) { %>
       <div class="empty-state">
         <h2>No projects yet</h2>
@@ -42,14 +42,15 @@
         <% for (const project of projects) { %>
           <% const health = project.health || 'unknown'; %>
           <% const worktrees = worktreesByParent[project.id] || []; %>
-          <% const isExpanded = expandedName === project.name; %>
-          <div class="panel project-row <%= project.status %><%= isExpanded ? ' expanded' : '' %>" data-project-name="<%= project.name %>" data-project-status="<%= project.status %>" x-show="<%= isExpanded ? 'true || ' : '' %>!filter || '<%= project.name.toLowerCase() %>'.includes(filter.toLowerCase())">
+          <div class="panel project-row <%= project.status %>"
+               :class="{ expanded: expanded === '<%= project.name %>' }"
+               data-project-name="<%= project.name %>"
+               data-project-status="<%= project.status %>"
+               x-show="expanded === '<%= project.name %>' || !filter || '<%= project.name.toLowerCase() %>'.includes(filter.toLowerCase())">
             <% if (projects.length > 1) { %>
-              <% if (isExpanded) { %>
-                <a href="/" class="expand-toggle" aria-label="Collapse <%= project.name %>">&#x25BC;</a>
-              <% } else { %>
-                <a href="/?expand=<%= encodeURIComponent(project.name) %>" class="expand-toggle" aria-label="Expand <%= project.name %>">&#x25B6;</a>
-              <% } %>
+              <a href="#" class="expand-toggle" aria-label="Toggle <%= project.name %>"
+                 @click.prevent="toggle('<%= project.name %>', '<%= project.id %>')"
+                 x-html="expanded === '<%= project.name %>' ? '&#x25BC;' : '&#x25B6;'"></a>
             <% } %>
             <span class="project-row-name"><%= project.name %></span>
             <span class="project-row-url">
@@ -72,17 +73,10 @@
                 <% } %>
               </span>
             <% } %>
-            <% if (isExpanded && expandedProject) { %>
-              <div class="project-row-detail">
-                <%- include('partials/_project_detail', {
-                  project: expandedProject,
-                  worktrees: expandedProject.worktrees,
-                  logs: expandedProject.logs,
-                  detection: expandedProject.detection,
-                  config: config
-                }) %>
-              </div>
-            <% } %>
+            <div class="project-row-detail"
+                 x-show="expanded === '<%= project.name %>'"
+                 x-html="detailCache['<%= project.name %>'] || ''">
+            </div>
           </div>
         <% } %>
       </div>
@@ -90,6 +84,122 @@
   </main>
 
   <script>
+    function projectList() {
+      return {
+        filter: '',
+        sort: 'name',
+        expanded: null,
+        loading: null,
+        detailCache: {},
+
+        init() {
+          // Read initial expand from server-side or URL
+          var initialExpand = <%= JSON.stringify(expandName) %>;
+          var singleProject = <%= projects.length === 1 ? JSON.stringify(projects[0].name) : 'null' %>;
+          var projectIds = <%- JSON.stringify(projects.reduce(function(m, p) { m[p.name] = p.id; return m; }, {})) %>;
+          this._projectIds = projectIds;
+          this._singleProject = singleProject;
+
+          var expandTarget = initialExpand || singleProject;
+          if (expandTarget && projectIds[expandTarget]) {
+            this.toggle(expandTarget, projectIds[expandTarget]);
+          }
+        },
+
+        async toggle(name, id) {
+          // Collapse if already expanded
+          if (this.expanded === name) {
+            // Don't collapse if single project
+            if (this._singleProject) return;
+            this.expanded = null;
+            this._cleanupDetail(name);
+            history.replaceState(null, '', '/');
+            return;
+          }
+
+          // Clean up previous expanded
+          if (this.expanded) {
+            this._cleanupDetail(this.expanded);
+          }
+
+          // If cached, just expand
+          if (this.detailCache[name]) {
+            this.expanded = name;
+            this._updateUrl(name);
+            this.$nextTick(() => {
+              this._activateScripts(name);
+              this._scrollToProject(name);
+            });
+            return;
+          }
+
+          // Fetch detail partial
+          this.loading = name;
+          try {
+            var res = await fetch('/projects/' + id + '/detail-partial');
+            if (!res.ok) throw new Error('Failed to load');
+            var html = await res.text();
+            this.detailCache[name] = html;
+            this.expanded = name;
+            this.loading = null;
+            this._updateUrl(name);
+            this.$nextTick(() => {
+              this._activateScripts(name);
+              this._scrollToProject(name);
+            });
+          } catch (err) {
+            this.loading = null;
+            console.error('Error loading detail for ' + name + ':', err);
+          }
+        },
+
+        _updateUrl(name) {
+          var url = new URL(window.location);
+          url.searchParams.set('expand', name);
+          history.replaceState(null, '', url.toString());
+        },
+
+        _scrollToProject(name) {
+          var el = document.querySelector('[data-project-name="' + name + '"]');
+          if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        },
+
+        _activateScripts(name) {
+          // Find the detail container and re-create script tags so the browser executes them
+          var row = document.querySelector('[data-project-name="' + name + '"]');
+          if (!row) return;
+          var detail = row.querySelector('.project-row-detail');
+          if (!detail) return;
+          var scripts = detail.querySelectorAll('script');
+          scripts.forEach(function(oldScript) {
+            var newScript = document.createElement('script');
+            if (oldScript.src) {
+              newScript.src = oldScript.src;
+            } else {
+              newScript.textContent = oldScript.textContent;
+            }
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+          });
+        },
+
+        _cleanupDetail(name) {
+          // Close any EventSources from the detail partial
+          var row = document.querySelector('[data-project-name="' + name + '"]');
+          if (!row) return;
+          var id = this._projectIds[name];
+          if (id && window._pd && window._pd[id]) {
+            if (window._pd[id].eventSource) {
+              window._pd[id].eventSource.close();
+              window._pd[id].eventSource = null;
+            }
+            delete window._pd[id];
+          }
+          // Clear cache so re-expand fetches fresh data
+          delete this.detailCache[name];
+        }
+      };
+    }
+
     // Lightweight startup subscription for list-view action buttons
     function _listSubscribeStartup(id, btn) {
       var es = new EventSource('/projects/' + id + '/startup');
@@ -151,14 +261,12 @@
       };
     }
 
-    // Scroll expanded project into view
-    (function() {
-      var el = document.querySelector('.project-row.expanded');
-      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    })();
-
-    // Auto-refresh every 30 seconds
-    setTimeout(() => location.reload(), 30000);
+    // Auto-refresh every 30 seconds (only when no project is expanded)
+    setInterval(function() {
+      if (!document.querySelector('.project-row.expanded')) {
+        location.reload();
+      }
+    }, 30000);
 
     // Subscribe to startup progress for all projects currently starting
     <% for (const project of projects) { %>
