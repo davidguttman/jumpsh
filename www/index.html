@@ -62,17 +62,19 @@
     .screenshots {
       margin: 2rem 0 1rem;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       gap: 1.5rem;
-      align-items: center;
+      align-items: flex-start;
     }
     .screenshots figure {
       margin: 0;
       text-align: center;
+      flex: 1;
+      min-width: 0;
     }
     .screenshots img {
       width: 100%;
-      max-width: 700px;
+      max-width: 500px;
       border-radius: 8px;
       border: 1px solid var(--border);
       box-shadow: 0 4px 24px rgba(0, 212, 170, 0.08), 0 1px 4px rgba(0, 0, 0, 0.4);
@@ -82,6 +84,9 @@
       font-size: 0.85rem;
       margin-top: 0.5rem;
     }
+    @media (max-width: 600px) {
+      .screenshots { flex-direction: column; align-items: center; }
+    }
   </style>
 </head>
 <body>
@@ -90,17 +95,6 @@
     <p class="tagline">Local dev servers with real HTTPS URLs</p>
     <p>No port hunting. No cert wrangling. No DNS config.<br>
     Every project gets a stable <code>https://yourapp.jump.sh</code> URL that just works.</p>
-  </div>
-
-  <div class="screenshots">
-    <figure>
-      <img src="img/dashboard.png" alt="jump.sh dashboard showing project list with URLs and status">
-      <figcaption>Dashboard — all your projects with their HTTPS URLs at a glance</figcaption>
-    </figure>
-    <figure>
-      <img src="img/project-expanded.png" alt="Expanded project view showing worktrees, logs, and settings">
-      <figcaption>Expanded project — worktrees, live logs, and controls in one place</figcaption>
-    </figure>
   </div>
 
   <h2>Problems jump.sh solves</h2>
@@ -145,6 +139,17 @@ https://myapp--feature-x.jump.sh → .worktrees/feature-x</code></pre>
     via periodic scanning — no need to register each branch.
   </p>
   <p class="muted">Agents working on feature branches can verify changes at the branch-specific URL without interfering with main.</p>
+
+  <div class="screenshots">
+    <figure>
+      <img src="img/dashboard.png" alt="jump.sh dashboard showing project list with URLs and status">
+      <figcaption>Dashboard — all your projects with their HTTPS URLs at a glance</figcaption>
+    </figure>
+    <figure>
+      <img src="img/project-expanded.png" alt="Expanded project view showing worktrees, logs, and settings">
+      <figcaption>Expanded project — worktrees, live logs, and controls in one place</figcaption>
+    </figure>
+  </div>
 
   <h2>Commands</h2>
   <ul>
