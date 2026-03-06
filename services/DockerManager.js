@@ -221,7 +221,7 @@ class DockerManager {
     // Check Docker availability before attempting anything
     const dockerCheck = await checkDockerAvailability();
     if (!dockerCheck.available) {
-      return { success: false, error: 'Docker is not running. Please start Docker and try again.' };
+      return { success: false, error: dockerCheck.error };
     }
 
     // For worktrees, inherit overrides from parent project
