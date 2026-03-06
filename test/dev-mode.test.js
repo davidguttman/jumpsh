@@ -14,6 +14,61 @@ const __dirname = path.dirname(__filename);
 
 const fixturesDir = path.join(__dirname, 'fixtures/apps');
 
+// ---- detectDomainFromHost (mirrors server.js logic) ----
+
+// Duplicated from server.js for unit-testing the algorithm
+function detectDomainFromHost(hostname) {
+  const host = hostname.replace(/:\d+$/, '');
+  for (const prefix of ['dash.', 'dashboard.']) {
+    if (host.startsWith(prefix)) {
+      return host.slice(prefix.length);
+    }
+  }
+  const labels = host.split('.');
+  if (labels.length >= 3) {
+    return labels.slice(1).join('.');
+  }
+  return null;
+}
+
+describe('detectDomainFromHost', () => {
+  it('dash.user.jump.sh => user.jump.sh', () => {
+    assert.equal(detectDomainFromHost('dash.davidguttman.jump.sh'), 'davidguttman.jump.sh');
+  });
+
+  it('dashboard.user.jump.sh => user.jump.sh', () => {
+    assert.equal(detectDomainFromHost('dashboard.davidguttman.jump.sh'), 'davidguttman.jump.sh');
+  });
+
+  it('worktree host: project--branch.user.jump.sh => user.jump.sh', () => {
+    assert.equal(detectDomainFromHost('jump-sh--dev-mode.davidguttman.jump.sh'), 'davidguttman.jump.sh');
+  });
+
+  it('project.user.jump.sh => user.jump.sh', () => {
+    assert.equal(detectDomainFromHost('fixture-node-npm-vite.davidguttman.jump.sh'), 'davidguttman.jump.sh');
+  });
+
+  it('strips port before detection', () => {
+    assert.equal(detectDomainFromHost('jump-sh--dev-mode.davidguttman.jump.sh:4443'), 'davidguttman.jump.sh');
+  });
+
+  it('two-part host (jump.sh) => null', () => {
+    assert.equal(detectDomainFromHost('jump.sh'), null);
+  });
+
+  it('single-label host (localhost) => null', () => {
+    assert.equal(detectDomainFromHost('localhost'), null);
+  });
+
+  it('localhost with port => null', () => {
+    assert.equal(detectDomainFromHost('localhost:4443'), null);
+  });
+
+  it('dash prefix still wins over generic 3+ label fallback', () => {
+    assert.equal(detectDomainFromHost('dash.example.com'), 'example.com');
+  });
+});
+
 // ---- JUMPSH_DEV_MODE parsing ----
 
 describe('JUMPSH_DEV_MODE parsing', () => {

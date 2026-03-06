@@ -57,13 +57,20 @@ function detectDomainFromCerts() {
   return null;
 }
 
-// Detect domain from Host header (strip dashboard prefix)
+// Detect domain from Host header (strip first label to get base domain)
 function detectDomainFromHost(hostname) {
   const host = hostname.replace(/:\d+$/, '');
+  // Explicit dashboard prefixes
   for (const prefix of ['dash.', 'dashboard.']) {
     if (host.startsWith(prefix)) {
       return host.slice(prefix.length);
     }
+  }
+  // For any subdomain host with 3+ labels (e.g. project.user.jump.sh),
+  // derive base domain as everything after the first label
+  const labels = host.split('.');
+  if (labels.length >= 3) {
+    return labels.slice(1).join('.');
   }
   return null;
 }
