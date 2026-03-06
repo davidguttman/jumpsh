@@ -73,7 +73,7 @@ const domain = process.env.JUMPSH_DOMAIN || detectDomainFromCerts() || 'jump.sh'
 // Config
 const explicitPort = process.env.JUMPSH_PORT_EXPLICIT === '1' || process.env.JUMPSH_PORT;
 const config = {
-  port: parseInt(process.env.JUMPSH_PORT, 10) || 443,
+  port: parseInt(process.env.JUMPSH_PORT, 10) || (process.env.JUMPSH_HTTPS === 'false' ? 80 : 443),
   explicitPort: !!explicitPort,
   domain,
   https: process.env.JUMPSH_HTTPS !== 'false',
