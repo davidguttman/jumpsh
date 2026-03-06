@@ -62,9 +62,9 @@
             <% } %>
             <span class="project-row-url">
               <% if (health === 'healthy') { %>
-                <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></a>
+                <a href="<%= config.projectUrl(project.subdomain) %>" target="_blank"><%= config.projectUrl(project.subdomain).replace(/^https?:\/\//, '') %></a>
               <% } else { %>
-                <span class="url-inactive"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
+                <span class="url-inactive"><%= config.projectUrl(project.subdomain).replace(/^https?:\/\//, '') %></span>
               <% } %>
             </span>
             <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
@@ -73,7 +73,7 @@
                 <% for (const wt of worktrees) { %>
                   <% const wtHealth = wt.health || 'unknown'; %>
                   <% if (wtHealth === 'healthy') { %>
-                    <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank" class="wt-chip"><%= wt.branch_name %></a>
+                    <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank" class="wt-chip"><%= wt.branch_name %></a>
                   <% } else { %>
                     <span class="wt-chip wt-chip-inactive"><%= wt.branch_name %></span>
                   <% } %>

@@ -125,13 +125,34 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Per-request domain detection from Host header
 app.use((req, res, next) => {
-  const detected = detectDomainFromHost(req.get('host') || '');
+  const hostHeader = req.get('x-forwarded-host') || req.get('host') || '';
+  const detected = detectDomainFromHost(hostHeader);
   if (detected && detected !== config.domain) {
     req.requestConfig = { ...config, domain: detected, dashboardHost: `dash.${detected}` };
     req.requestConfig.formatUrl = formatUrl;
   } else {
     req.requestConfig = config;
   }
+
+  // In dev mode, detect context subdomain for encoded project links
+  if (devMode) {
+    const host = hostHeader.replace(/:\d+$/, '');
+    const firstLabel = host.split('.')[0];
+    if (firstLabel && firstLabel !== 'dash' && firstLabel !== 'dashboard' && firstLabel !== 'www'
+        && firstLabel !== 'localhost' && firstLabel !== req.requestConfig.domain.split('.')[0]) {
+      req.requestConfig = { ...req.requestConfig, contextSubdomain: firstLabel };
+    }
+  }
+
+  // Helper: generate project URL, using encoded context host when applicable
+  const rc = req.requestConfig;
+  rc.projectUrl = function(projectSubdomain) {
+    if (rc.contextSubdomain) {
+      return formatUrl(projectSubdomain + '--' + rc.contextSubdomain + '.' + rc.domain);
+    }
+    return formatUrl(projectSubdomain + '.' + rc.domain);
+  };
+
   next();
 });
 

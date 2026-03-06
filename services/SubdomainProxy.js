@@ -1,6 +1,25 @@
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { detectProjectType } from './ProjectDetector.js';
 
+/**
+ * Decode an encoded context-host label.
+ * e.g. "fixture-node-npm-vite--jump-sh--dev-mode"
+ * Tries each '--' boundary from left to right and returns candidates.
+ */
+function decodeContextHostCandidates(label) {
+  const candidates = [];
+  let idx = 0;
+  while (true) {
+    const pos = label.indexOf('--', idx);
+    if (pos === -1 || pos === 0) break;
+    const prefix = label.slice(0, pos);
+    const suffix = label.slice(pos + 2);
+    if (suffix) candidates.push({ projectSubdomain: prefix, contextSubdomain: suffix });
+    idx = pos + 1;
+  }
+  return candidates;
+}
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -19,18 +38,42 @@ class SubdomainProxy {
 
   middleware() {
     return async (req, res, next) => {
-      const host = req.get('host');
+      let host = req.get('host');
       if (!host) return next();
 
-      const subdomain = this.extractSubdomain(host);
+      let subdomain = this.extractSubdomain(host);
+
+      // Fallback to X-Forwarded-Host when Host doesn't yield a subdomain
+      // (e.g., behind a reverse proxy with changeOrigin: true)
+      if (!subdomain || subdomain === 'localhost') {
+        const fwdHost = req.get('x-forwarded-host');
+        if (fwdHost) {
+          host = fwdHost;
+          subdomain = this.extractSubdomain(fwdHost);
+        }
+      }
+
       if (!subdomain) return next();
 
       // Skip if this is the main dashboard domain
       if (this.isMainDomain(subdomain)) return next();
 
       // Find project by subdomain (local routes)
-      this.db.getProjectBySubdomain(subdomain, async (err, project) => {
-        if (err || !project) {
+      let project = await new Promise(resolve => {
+        this.db.getProjectBySubdomain(subdomain, (err, p) => resolve(err ? null : p));
+      });
+
+      // Context-host decode fallback: try splitting on '--'
+      let isContextRoute = false;
+      if (!project && subdomain.includes('--')) {
+        const resolved = await this._resolveEncodedSubdomain(subdomain);
+        if (resolved) {
+          project = resolved.project;
+          isContextRoute = resolved.isContext;
+        }
+      }
+
+      if (!project) {
           const homeUrl = this.config.formatUrl(`dashboard.${this.config.domain}`);
           return res.status(404).send(`
             <html>
@@ -42,33 +85,33 @@ class SubdomainProxy {
               </body>
             </html>
           `);
-        }
+      }
 
-        // Get the container's port
-        const port = await this.docker.getPort(project);
-        if (!port) {
-          const projectUrl = this.config.formatUrl(`dashboard.${this.config.domain}`, `/projects/${project.id}`);
-          return res.status(503).send(`
-            <html>
-              <head><title>Project Not Running</title></head>
-              <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                <h1>503 - Project Not Running</h1>
-                <p><strong>${project.name}</strong> is not currently running.</p>
-                <a href="${projectUrl}">Start Project</a>
-              </body>
-            </html>
-          `);
-        }
+      // Get the container's port
+      const port = await this.docker.getPort(project);
+      if (!port) {
+        const projectUrl = this.config.formatUrl(`dashboard.${this.config.domain}`, `/projects/${project.id}`);
+        return res.status(503).send(`
+          <html>
+            <head><title>Project Not Running</title></head>
+            <body style="font-family: system-ui; padding: 40px; text-align: center;">
+              <h1>503 - Project Not Running</h1>
+              <p><strong>${project.name}</strong> is not currently running.</p>
+              <a href="${projectUrl}">Start Project</a>
+            </body>
+          </html>
+        `);
+      }
 
-        // Mock container: serve placeholder instead of proxying
-        if (this.docker.isMock) {
-          let detection = {};
-          try { detection = detectProjectType(project.path); } catch {}
-          const name = escapeHtml(project.name);
-          const type = escapeHtml(detection.type || 'unknown');
-          const framework = escapeHtml(detection.framework || 'none');
-          const projPath = escapeHtml(project.path);
-          return res.send(`<!DOCTYPE html>
+      // Mock container: serve placeholder instead of proxying
+      if (this.docker.isMock) {
+        let detection = {};
+        try { detection = detectProjectType(project.path); } catch {}
+        const name = escapeHtml(project.name);
+        const type = escapeHtml(detection.type || 'unknown');
+        const framework = escapeHtml(detection.framework || 'none');
+        const projPath = escapeHtml(project.path);
+        return res.send(`<!DOCTYPE html>
 <html><head><title>${name} - Mock</title></head>
 <body style="font-family: system-ui; padding: 2rem; max-width: 600px; margin: 0 auto;">
   <h1>${name}</h1>
@@ -80,12 +123,11 @@ class SubdomainProxy {
     <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Port</td><td>${port}</td></tr>
   </table>
 </body></html>`);
-        }
+      }
 
-        // Get or create proxy for this port
-        const proxy = this.getOrCreateProxy(port, project);
-        return proxy(req, res, next);
-      });
+      // Get or create proxy for this port
+      const proxy = this.getOrCreateProxy(port, project);
+      return proxy(req, res, next);
     };
   }
 
@@ -119,6 +161,12 @@ class SubdomainProxy {
         changeOrigin: true,
         ws: true,
         logLevel: 'silent',
+        onProxyReq: (proxyReq, req) => {
+          // Forward original host so proxied servers can detect context subdomains
+          if (req.headers.host) {
+            proxyReq.setHeader('x-forwarded-host', req.headers.host);
+          }
+        },
         onError: (err, req, res) => {
           console.error(`Proxy error for ${projectName} (port ${port}):`, err.message);
           if (!res.headersSent) {
@@ -156,9 +204,35 @@ docker compose -f .jump.sh/docker-compose.yml exec app ss -tlnp</pre>
     return this.proxyCache.get(cacheKey);
   }
 
+  /**
+   * Try to resolve an encoded subdomain by splitting on '--'.
+   * In dev mode (isMock): tries prefix as project subdomain (inner routing).
+   * Always: tries suffix as context subdomain (outer proxy routing).
+   */
+  async _resolveEncodedSubdomain(subdomain) {
+    const candidates = decodeContextHostCandidates(subdomain);
+    for (const { projectSubdomain, contextSubdomain } of candidates) {
+      // Dev mode: try prefix as a local project
+      if (this.docker.isMock) {
+        const project = await new Promise(resolve => {
+          this.db.getProjectBySubdomain(projectSubdomain, (err, p) => resolve(err ? null : p));
+        });
+        if (project) return { project, isContext: false };
+      }
+
+      // Try suffix as context project (proxy through to its container)
+      const ctxProject = await new Promise(resolve => {
+        this.db.getProjectBySubdomain(contextSubdomain, (err, p) => resolve(err ? null : p));
+      });
+      if (ctxProject) return { project: ctxProject, isContext: true };
+    }
+    return null;
+  }
+
   clearCache() {
     this.proxyCache.clear();
   }
 }
 
+export { decodeContextHostCandidates };
 export default SubdomainProxy;

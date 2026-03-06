@@ -10,11 +10,11 @@
   <p><code><%= project.path %></code></p>
   <p>
     <% if (health === 'healthy') { %>
-      <a href="<%= config.formatUrl(project.subdomain + '.' + config.domain) %>" target="_blank" id="subdomain-link-<%= project.id %>">
-        <%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %>
+      <a href="<%= config.projectUrl(project.subdomain) %>" target="_blank" id="subdomain-link-<%= project.id %>">
+        <%= config.projectUrl(project.subdomain).replace(/^https?:\/\//, '') %>
       </a>
     <% } else { %>
-      <span id="subdomain-link-<%= project.id %>"><%= config.formatUrl(project.subdomain + '.' + config.domain).replace(/^https?:\/\//, '') %></span>
+      <span id="subdomain-link-<%= project.id %>"><%= config.projectUrl(project.subdomain).replace(/^https?:\/\//, '') %></span>
     <% } %>
   </p>
 </div>
@@ -85,7 +85,7 @@
         <% for (const wt of worktrees) { %>
           <tr>
             <td>
-              <a href="<%= config.formatUrl(wt.subdomain + '.' + config.domain) %>" target="_blank">
+              <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank">
                 <code><%= wt.branch_name %></code>
               </a>
             </td>
