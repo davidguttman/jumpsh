@@ -6,6 +6,16 @@ const execFileAsync = promisify(execFile);
 let _composeCommand = null;
 let _dockerAvailable = null;
 
+const DOCKER_INSTALL_HELP = `Docker not found. Install Docker Desktop from https://docker.com/products/docker-desktop or run:
+  - macOS:         brew install --cask docker
+  - Ubuntu/Debian: sudo apt install docker.io
+  - Arch:          sudo pacman -S docker`;
+
+const COMPOSE_INSTALL_HELP = `docker-compose not found. Install Docker Desktop from https://docker.com/products/docker-desktop or run:
+  - macOS:         brew install docker-compose
+  - Ubuntu/Debian: sudo apt install docker-compose
+  - Arch:          sudo pacman -S docker-compose`;
+
 /**
  * Check if docker daemon is reachable.
  */
@@ -31,7 +41,11 @@ export async function checkDockerAvailability() {
     return { available: true };
   } catch (err) {
     _dockerAvailable = false;
-    return { available: false, error: err.message };
+    const notInstalled = err.code === 'ENOENT';
+    const message = notInstalled
+      ? DOCKER_INSTALL_HELP
+      : 'Docker is not running. Please start Docker and try again.';
+    return { available: false, error: message };
   }
 }
 
@@ -40,7 +54,7 @@ export async function checkDockerAvailability() {
  */
 export function requireDocker() {
   if (!isDockerAvailable()) {
-    console.error('Docker is not available. Ensure Docker is installed and the daemon is running.');
+    console.error(DOCKER_INSTALL_HELP);
     process.exit(5);
   }
 }
@@ -76,7 +90,7 @@ export function getComposeCommand() {
 export function buildComposeSpawn(subcommand, composeFile) {
   const cmd = getComposeCommand();
   if (!cmd) {
-    throw new Error('Neither "docker compose" (v2) nor "docker-compose" (v1) is available.');
+    throw new Error(COMPOSE_INSTALL_HELP);
   }
   const parts = cmd.split(' '); // ['docker', 'compose'] or ['docker-compose']
   const command = parts[0];

@@ -151,6 +151,42 @@ class SubdomainProxy {
            subdomain === this.config.domain.split('.')[0];
   }
 
+  attachUpgrade(server) {
+    server.on('upgrade', async (req, socket, head) => {
+      let host = req.headers.host;
+      if (!host) return socket.destroy();
+
+      let subdomain = this.extractSubdomain(host);
+
+      if (!subdomain || subdomain === 'localhost') {
+        const fwdHost = req.headers['x-forwarded-host'];
+        if (fwdHost) {
+          host = fwdHost;
+          subdomain = this.extractSubdomain(fwdHost);
+        }
+      }
+
+      if (!subdomain || this.isMainDomain(subdomain)) return socket.destroy();
+
+      let project = await new Promise(resolve => {
+        this.db.getProjectBySubdomain(subdomain, (err, p) => resolve(err ? null : p));
+      });
+
+      if (!project && subdomain.includes('--')) {
+        const resolved = await this._resolveEncodedSubdomain(subdomain);
+        if (resolved) project = resolved.project;
+      }
+
+      if (!project) return socket.destroy();
+
+      const port = await this.docker.getPort(project);
+      if (!port) return socket.destroy();
+
+      const proxy = this.getOrCreateProxy(port, project);
+      proxy.upgrade(req, socket, head);
+    });
+  }
+
   getOrCreateProxy(port, project = null) {
     const cacheKey = `port-${port}`;
     
@@ -159,7 +195,6 @@ class SubdomainProxy {
       const proxy = createProxyMiddleware({
         target: `http://localhost:${port}`,
         changeOrigin: true,
-        ws: true,
         logLevel: 'silent',
         onProxyReq: (proxyReq, req) => {
           // Forward original host so proxied servers can detect context subdomains

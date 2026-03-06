@@ -808,6 +808,9 @@ if (config.https) {
   server = http.createServer(app);
 }
 
+// Wire WebSocket upgrades through the subdomain proxy
+subdomainProxy.attachUpgrade(server);
+
 // Check port availability before binding
 try {
   await probePort(config.port);
