@@ -67,7 +67,6 @@
                 <span class="url-inactive"><%= config.projectUrl(project.subdomain).replace(/^https?:\/\//, '') %></span>
               <% } %>
             </span>
-            <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
             <% if (worktrees.length > 0) { %>
               <span class="project-row-worktrees">
                 <% for (const wt of worktrees) { %>
@@ -80,6 +79,7 @@
                 <% } %>
               </span>
             <% } %>
+            <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
             <div class="project-row-detail"
                  x-show="expanded === '<%= project.name %>'"
                  x-html="detailCache['<%= project.name %>'] || ''">
