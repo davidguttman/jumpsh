@@ -11,6 +11,20 @@
 <body>
   <%- include('partials/_header') %>
 
+  <div class="docker-warning" x-data="{ dockerAvailable: true }" x-init="
+    async function checkDockerStatus() {
+      try {
+        const res = await fetch('/api/docker-status');
+        const data = await res.json();
+        dockerAvailable = data.available;
+      } catch {}
+    }
+    checkDockerStatus();
+    setInterval(checkDockerStatus, 30000);
+  " x-show="!dockerAvailable" x-cloak>
+    ⚠️ Docker not detected — start Docker to launch projects
+  </div>
+
   <main x-data="projectList()" x-init="init()">
     <% if (projects.length === 0) { %>
       <div class="empty-state">
