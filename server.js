@@ -71,8 +71,10 @@ function detectDomainFromHost(hostname) {
 const domain = process.env.JUMPSH_DOMAIN || detectDomainFromCerts() || 'jump.sh';
 
 // Config
+const explicitPort = process.env.JUMPSH_PORT_EXPLICIT === '1' || process.env.JUMPSH_PORT;
 const config = {
-  port: parseInt(process.env.JUMPSH_PORT, 10) || 4443,
+  port: parseInt(process.env.JUMPSH_PORT, 10) || 443,
+  explicitPort: !!explicitPort,
   domain,
   https: process.env.JUMPSH_HTTPS !== 'false',
   certPath,
@@ -777,25 +779,52 @@ if (config.https) {
 try {
   await probePort(config.port);
 } catch (err) {
-  if (err.code === 'EADDRINUSE') {
-    const holder = await identifyPortHolder(config.port);
-    if (holder) {
-      const isJumpsh = holder.name === 'node' || holder.name === 'jumpsh';
-      if (isJumpsh) {
-        console.warn(`Port ${config.port} is already in use by PID ${holder.pid}.`);
+  if (config.explicitPort) {
+    // Explicit --port or JUMPSH_PORT: no fallback, fail hard
+    if (err.code === 'EADDRINUSE') {
+      const holder = await identifyPortHolder(config.port);
+      if (holder) {
+        console.error(`Port ${config.port} is in use by process ${holder.pid} (${holder.name}).`);
       } else {
-        console.warn(`Port ${config.port} is in use by process ${holder.pid} (${holder.name}).`);
+        console.error(`Port ${config.port} is already in use.`);
       }
-    } else {
-      console.warn(`Port ${config.port} is already in use.`);
-    }
-    const nextPort = await findNextAvailablePort(config.port);
-    if (!nextPort) {
-      deverror('Port conflict with no fallback', { port: config.port, holder });
+      console.error(`Cannot bind to explicitly requested port ${config.port}. Free the port or choose a different one with --port.`);
+      process.exit(4);
+    } else if (err.code === 'EACCES') {
+      console.error(`Permission denied binding to port ${config.port}.`);
+      console.error(`Ports below 1024 typically require elevated privileges. Try: sudo setcap cap_net_bind_service=+ep "$(which node)"`);
       process.exit(4);
     }
-    console.warn(`Falling back to available port ${nextPort}.`);
-    config.port = nextPort;
+    throw err;
+  }
+
+  // No explicit port: graceful fallback
+  if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+    const reason = err.code === 'EACCES' ? 'permission denied' : 'already in use';
+    if (err.code === 'EADDRINUSE') {
+      const holder = await identifyPortHolder(config.port);
+      if (holder) {
+        console.warn(`Port ${config.port} ${reason} (PID ${holder.pid}, ${holder.name}).`);
+      } else {
+        console.warn(`Port ${config.port} ${reason}.`);
+      }
+    } else {
+      console.warn(`Port ${config.port} ${reason}.`);
+    }
+    // Fall back to high port range
+    const fallbackStart = 4443;
+    try {
+      await probePort(fallbackStart);
+      config.port = fallbackStart;
+    } catch {
+      const nextPort = await findNextAvailablePort(fallbackStart);
+      if (!nextPort) {
+        deverror('Port conflict with no fallback', { port: config.port });
+        process.exit(4);
+      }
+      config.port = nextPort;
+    }
+    console.warn(`Falling back to port ${config.port}.`);
   } else {
     throw err;
   }
