@@ -10,3 +10,4 @@ dev.log.*
 api/node_modules/
 api/data/
 api/.env
+.ergo
