@@ -392,18 +392,20 @@ class DockerManager {
         } catch (retryError) {
           const retryBuildOutput = [retryError.stdout, retryError.stderr].filter(Boolean).join('\n');
           saveBuildLog(slug, retryBuildOutput);
+          const retryContainerError = `[container] Port conflict retry failed: ${retryError.message}`;
           projectError(projectPath, 'Port conflict retry failed', { name, error: retryError.message });
           this.healthStates.set(id.toString(), 'unhealthy');
-          this._emitStartup(id, { error: `Port conflict retry failed: ${retryError.message}`, buildLog: retryBuildOutput, done: true });
-          return { success: false, error: `Port conflict retry failed: ${retryError.message}`, buildLog: retryBuildOutput };
+          this._emitStartup(id, { error: retryContainerError, buildLog: retryBuildOutput, done: true });
+          return { success: false, error: retryContainerError, buildLog: retryBuildOutput };
         }
       }
       const buildOutput = [error.stdout, error.stderr].filter(Boolean).join('\n');
       saveBuildLog(slug, buildOutput);
+      const containerError = `[container] ${error.message}`;
       projectError(projectPath, 'Container start failed', { name, error: error.message });
       this.healthStates.set(id.toString(), 'unhealthy');
-      this._emitStartup(id, { error: error.message, buildLog: buildOutput, done: true });
-      return { success: false, error: error.message, buildLog: buildOutput };
+      this._emitStartup(id, { error: containerError, buildLog: buildOutput, done: true });
+      return { success: false, error: containerError, buildLog: buildOutput };
     }
   }
 

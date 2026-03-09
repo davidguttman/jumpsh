@@ -866,6 +866,34 @@ try {
   }
 }
 
+// ============ Docker Preflight Check ============
+if (!devMode) {
+  const dockerCheck = await checkDockerAvailability();
+  const composeCmd = (await import('./services/dockerCommand.js')).getComposeCommand();
+
+  if (!dockerCheck.available || !composeCmd) {
+    const missing = [];
+    if (!dockerCheck.available) missing.push('docker');
+    if (!composeCmd) missing.push('docker compose');
+
+    const msg = `${missing.join(' and ')} not available`;
+    const help = !dockerCheck.available
+      ? dockerCheck.error
+      : 'docker-compose not found. Install Docker Desktop or docker-compose.';
+    const lines = [msg, '', ...help.split('\n')];
+    const width = Math.max(...lines.map(l => l.length)) + 4;
+    const pad = (s) => s + ' '.repeat(Math.max(0, width - s.length));
+    console.error('');
+    console.error('╔' + '═'.repeat(width + 2) + '╗');
+    for (const line of lines) {
+      console.error('║ ' + pad(line) + ' ║');
+    }
+    console.error('╚' + '═'.repeat(width + 2) + '╝');
+    console.error('');
+    process.exit(5);
+  }
+}
+
 // Rotate logs on startup
 rotateLogs();
 
