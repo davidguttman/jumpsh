@@ -15,7 +15,8 @@
     "test:all": "node --test test/*.test.js test/e2e/*.test.js",
     "test:lifecycle": "scripts/e2e-lifecycle.sh",
     "api:install": "cd api && npm install",
-    "api:start": "node api/server.js"
+    "api:start": "node api/server.js",
+    "prepare": "scripts/install-hooks.sh"
   },
   "keywords": [
     "dev",
@@ -54,6 +55,8 @@
     "slugify": "^1.6.6"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "nodemon": "^3.1.0",
     "ws": "^8.19.0"
   }
