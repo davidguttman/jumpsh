@@ -16,7 +16,9 @@
     "test:lifecycle": "scripts/e2e-lifecycle.sh",
     "api:install": "cd api && npm install",
     "api:start": "node api/server.js",
-    "prepare": "scripts/install-hooks.sh"
+    "prepare": "scripts/install-hooks.sh",
+    "test:flakiness": "node scripts/analyze-test-flakiness.js",
+    "test:lint-flaky": "node scripts/scan-flaky-patterns.js"
   },
   "keywords": [
     "dev",
