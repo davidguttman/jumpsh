@@ -17,7 +17,7 @@ import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { detectProjectType } from './services/ProjectDetector.js';
 import { getJumpshDir } from './services/ComposeGenerator.js';
-import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
+import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 
@@ -53,7 +53,7 @@ function detectDomainFromCerts() {
         return `${entry.name}.jump.sh`;
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -544,7 +544,7 @@ app.patch('/api/projects/:id', (req, res) => {
     // Delete cached Dockerfile when any override changes so it regenerates on next start
     const slug = project.subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const dockerfilePath = path.join(getJumpshDir(slug), 'Dockerfile');
-    try { fs.unlinkSync(dockerfilePath); } catch {}
+    try { fs.unlinkSync(dockerfilePath); } catch { /* ignore */ }
 
     db.updateProject(id, updates, (err) => {
       if (err) {
@@ -613,14 +613,14 @@ app.get('/api/projects', async (req, res) => {
 // ============ Detect Project Type API ============
 
 app.get('/api/detect', (req, res) => {
-  var projectPath = req.query.path;
+  const projectPath = req.query.path;
   if (!projectPath) {
     return res.status(400).json({ error: 'path query parameter is required' });
   }
 
-  var resolved = path.resolve(projectPath);
+  const resolved = path.resolve(projectPath);
   try {
-    var stat = fs.statSync(resolved);
+    const stat = fs.statSync(resolved);
     if (!stat.isDirectory()) {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
@@ -632,7 +632,7 @@ app.get('/api/detect', (req, res) => {
   }
 
   try {
-    var detection = detectProjectType(resolved);
+    const detection = detectProjectType(resolved);
     res.json(detection);
   } catch (err) {
     res.status(500).json({ error: 'Detection failed: ' + err.message });
@@ -708,9 +708,10 @@ async function identifyPortHolder(port) {
     let name = '';
     try {
       name = execSync(`ps -p ${pid} -o comm= 2>/dev/null`, { encoding: 'utf8' }).trim();
-    } catch {}
+    } catch { /* ignore */ }
     return { pid, name };
   } catch {
+    // ignore
     return null;
   }
 }
@@ -722,7 +723,7 @@ async function findNextAvailablePort(startPort, maxDelta = 25) {
     try {
       await probePort(p);
       return p;
-    } catch {}
+    } catch { /* port not available */ }
   }
   return null;
 }
@@ -776,7 +777,7 @@ if (config.https) {
         if (!firstSubCert) firstSubCert = pair;
       }
     }
-  } catch {}
+  } catch { /* ignore cert read errors */ }
 
   if (!defaultCert && !firstSubCert) {
     console.warn(
@@ -1006,7 +1007,7 @@ async function shutdown(signal) {
 
   try {
     // Remove server.json so CLI knows the server is not running
-    try { fs.unlinkSync(serverJsonPath); } catch {}
+    try { fs.unlinkSync(serverJsonPath); } catch { /* ignore */ }
 
     server.close();
 

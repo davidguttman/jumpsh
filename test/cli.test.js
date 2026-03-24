@@ -69,7 +69,7 @@ describe('project-schema sync', () => {
     const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
     // Extract schema field names from PROJECT_FIELDS
-    const schemaFields = [...schemaSource.matchAll(/^  (\w+)\s*:\s*\{/gm)].map(m => m[1]).sort();
+    const schemaFields = [...schemaSource.matchAll(/^ {2}(\w+)\s*:\s*\{/gm)].map(m => m[1]).sort();
     assert.ok(schemaFields.length > 0, 'Should find schema fields');
 
     // Extract fields the CLI sends in the payload (payload.X = or X: in payload literal)

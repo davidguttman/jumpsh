@@ -143,7 +143,7 @@ class WorktreeScanner {
 
   // Cleanup all watchers
   cleanup() {
-    for (const [projectId, watcher] of this.watchers) {
+    for (const [_projectId, watcher] of this.watchers) {
       watcher.close();
     }
     this.watchers.clear();

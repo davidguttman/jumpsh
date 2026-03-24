@@ -227,7 +227,7 @@ describe('MockDockerManager op cancellation', () => {
     // Force clear the _startingProjects so stop doesn't block
     mdm._startingProjects.delete('1');
     await mdm.stop(project);
-    const result = await startPromise;
+    const _result = await startPromise;
     // Start may have finished or been cancelled depending on timing
     // Either way, final state should be stopped after stop()
     const status = await mdm.getStatus(project);
@@ -263,7 +263,7 @@ describe('MockDockerManager getHealthWithProbe stale transition', () => {
     assert.notEqual(finalHealth, 'healthy', `Expected health to not be healthy after stop, got: ${finalHealth}`);
 
     // No stale step-5 done event should have been emitted after the stop
-    const doneEvents = events.filter(e => e.step === 5 && e.done);
+    const _doneEvents = events.filter(e => e.step === 5 && e.done);
     // The stop emits its own done event (with error: 'Project stopped'), but
     // there should be no step-5/Ready! done event after the stop
     const step5AfterStop = events.slice(events.findIndex(e => e.error === 'Project stopped') + 1)
