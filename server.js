@@ -239,7 +239,7 @@ app.post('/projects', (req, res) => {
       name, path: projectPath, description,
       override_build_command: override_build_command || null,
       override_start_command: override_start_command || null,
-      override_port: override_port ? parseInt(override_port, 10) : null,
+      override_port: override_port ? (Number.isInteger(+override_port) && +override_port >= 1 && +override_port <= 65535 ? parseInt(override_port, 10) : null) : null,
       override_docker_image: override_docker_image || null,
       override_env: override_env || null,
     }, (err, id) => {
@@ -255,7 +255,11 @@ app.post('/projects', (req, res) => {
           // Start watching for worktrees
           worktreeScanner.watchProject(project);
           // Auto-start the project
-          await docker.start(project);
+          try {
+            await docker.start(project);
+          } catch (startErr) {
+            console.error("Auto-start failed for project " + id + ":", startErr.message);
+          }
         }
       });
 
@@ -337,7 +341,7 @@ app.post('/projects/:id/start', (req, res) => {
       db.getWorktreesForProject(id, (err, worktrees) => {
         if (err || !worktrees) return;
         for (const wt of worktrees) {
-          docker.start(wt);
+          docker.start(wt).catch(function(e) { console.error("Worktree start failed for " + wt.path + ":", e.message); });
         }
       });
     } else {
@@ -363,7 +367,7 @@ app.post('/projects/:id/stop', (req, res) => {
       db.getWorktreesForProject(id, (err, worktrees) => {
         if (err || !worktrees) return;
         for (const wt of worktrees) {
-          docker.stop(wt);
+          docker.stop(wt).catch(function(e) { console.error("Worktree stop failed for " + wt.path + ":", e.message); });
         }
       });
     } else {
@@ -644,6 +648,10 @@ app.get('/api/detect', (req, res) => {
 app.get('/api/browse', (req, res) => {
   const requestedPath = req.query.path || '/';
   const resolved = path.resolve(requestedPath);
+  const homeDir = os.homedir();
+  if (!resolved.startsWith(homeDir) && resolved !== "/") {
+    return res.status(403).json({ error: "Browsing is restricted to your home directory" });
+  }
 
   try {
     const entries = fs.readdirSync(resolved, { withFileTypes: true });
