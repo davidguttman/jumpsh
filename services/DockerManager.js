@@ -5,7 +5,7 @@ import net from 'net';
 import { execCompose, buildComposeSpawn, checkDockerAvailability } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
 import { generateCompose, getJumpshDir } from './ComposeGenerator.js';
-import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
+import { projectInfo, projectError } from '../lib/devlog.js';
 
 // Timeouts (ms)
 const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
