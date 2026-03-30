@@ -9,6 +9,29 @@ const DB_PATH = path.join(DATA_DIR, 'projects.json');
 
 const DEFAULT_DATA = { nextId: 1, projects: [] };
 
+const PROJECT_DEFAULTS = {
+  description: null,
+  parent_project_id: null,
+  is_worktree: 0,
+  branch_name: null,
+  assigned_port: null,
+  override_build_command: null,
+  override_start_command: null,
+  override_port: null,
+  override_docker_image: null,
+  override_env: null,
+};
+
+function applyDefaults(record) {
+  if (!record) return record;
+  for (const [key, value] of Object.entries(PROJECT_DEFAULTS)) {
+    if (!(key in record)) {
+      record[key] = value;
+    }
+  }
+  return record;
+}
+
 class Database {
   constructor() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -116,23 +139,23 @@ class Database {
   getProject(id, callback) {
     const numId = parseInt(id, 10);
     const project = this.db.data.projects.find(p => p.id === numId) || null;
-    callback(null, project);
+    callback(null, applyDefaults(project));
   }
 
   getProjectBySubdomain(subdomain, callback) {
     const s = subdomain.toLowerCase();
     const project = this.db.data.projects.find(p => p.subdomain === s) || null;
-    callback(null, project);
+    callback(null, applyDefaults(project));
   }
 
   getProjectByName(name, callback) {
     const project = this.db.data.projects.find(p => p.name === name && !p.is_worktree) || null;
-    callback(null, project);
+    callback(null, applyDefaults(project));
   }
 
   getProjectByPath(projectPath, callback) {
     const project = this.db.data.projects.find(p => p.path === projectPath) || null;
-    callback(null, project);
+    callback(null, applyDefaults(project));
   }
 
   findProject(nameOrSubdomain, callback) {
@@ -146,7 +169,8 @@ class Database {
   getAllProjects(callback) {
     const projects = this.db.data.projects
       .filter(p => !p.is_worktree)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(applyDefaults);
     callback(null, projects);
   }
 
@@ -156,7 +180,7 @@ class Database {
       const bParent = b.parent_project_id ?? -Infinity;
       if (aParent !== bParent) return aParent - bParent;
       return a.name.localeCompare(b.name);
-    });
+    }).map(applyDefaults);
     callback(null, projects);
   }
 
@@ -164,7 +188,8 @@ class Database {
     const numId = parseInt(projectId, 10);
     const worktrees = this.db.data.projects
       .filter(p => p.parent_project_id === numId)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(applyDefaults);
     callback(null, worktrees);
   }
 
