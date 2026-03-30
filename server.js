@@ -17,7 +17,7 @@ import WorktreeScanner from './services/WorktreeScanner.js';
 import SubdomainProxy from './services/SubdomainProxy.js';
 import { detectProjectType } from './services/ProjectDetector.js';
 import { getJumpshDir } from './services/ComposeGenerator.js';
-import { devinfo, devwarn, deverror, rotateLogs } from './lib/devlog.js';
+import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 
