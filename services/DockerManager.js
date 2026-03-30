@@ -548,6 +548,11 @@ class DockerManager {
     const { command, args } = buildComposeSpawn(['logs', '-f', '--no-color'], composePath);
     const child = this.spawner(command, args, { cwd: projectPath });
 
+    child.on("error", (err) => {
+      res.write("data: " + JSON.stringify({ line: "Process error: " + err.message, error: true }) + "\n\n");
+      res.end();
+    });
+
     child.stdout.on('data', (data) => {
       const lines = data.toString().split('\n');
       for (const line of lines) {
@@ -640,6 +645,8 @@ class DockerManager {
       this._emitStartup(project.id, { step: 4, totalSteps: TOTAL_STEPS, label: STEP_LABELS[4] });
       this.getPort(project).then(port => {
         if (port) this._probeHealth(project, port);
+      }).catch(err => {
+        console.error("Health probe failed for project " + project.id + ":", err.message);
       });
       return 'starting';
     }

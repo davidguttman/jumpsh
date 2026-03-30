@@ -322,7 +322,7 @@ ${volumes.join('\n')}${envFileSection}${envSection}
       options:
         max-size: "10m"
         max-file: "3"
-    command: ${detection.devCommand}
+    command: ${JSON.stringify(detection.devCommand)}
 `;
 }
 
