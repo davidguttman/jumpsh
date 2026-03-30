@@ -228,6 +228,9 @@ app.post('/projects', (req, res) => {
   db.getProjectByPath(projectPath, (pathErr, existingByPath) => {
     if (pathErr) {
       console.error('Pre-check path error:', pathErr.message);
+      const dbErr = { status: 500, error: 'Database error during path validation', code: 'DB_ERROR' };
+      if (wantsJson) return res.status(dbErr.status).json(dbErr);
+      return res.status(dbErr.status).send(dbErr.error);
     }
     if (existingByPath) {
       const err = { status: 409, error: `This directory is already registered as "${existingByPath.name}".`, field: 'path', code: 'DUPLICATE_PATH' };
