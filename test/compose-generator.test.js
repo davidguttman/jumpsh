@@ -1,7 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { generateCompose, getJumpshDir } from '../services/ComposeGenerator.js';
 import { makeTmpDir, writeJson, writeFile, cleanTmpDir } from './helpers/fixtures.js';

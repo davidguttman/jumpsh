@@ -1,6 +1,5 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import DockerManager from '../services/DockerManager.js';
 import { createMockDb } from './helpers/mock-db.js';

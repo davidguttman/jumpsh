@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { PROJECT_FIELDS } from '../lib/project-schema.js';
+import { SCHEMA } from '../lib/schema-definition.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BIN = path.join(__dirname, '..', 'bin', 'jumpsh.js');
@@ -228,27 +228,37 @@ describe('Database record shape stability', () => {
 // ---- Project schema snapshot ----
 
 describe('Project schema snapshot', () => {
-  it('PROJECT_FIELDS keys match expected snapshot', () => {
+  it('SCHEMA keys match expected snapshot', () => {
     const expectedKeys = [
+      'id',
       'name',
       'path',
+      'subdomain',
+      'description',
+      'parent_project_id',
+      'is_worktree',
+      'branch_name',
+      'assigned_port',
       'override_build_command',
       'override_start_command',
       'override_port',
       'override_docker_image',
       'override_env',
+      'created_at',
+      'updated_at',
+      'schema_version',
     ].sort();
 
-    const actualKeys = Object.keys(PROJECT_FIELDS).sort();
+    const actualKeys = Object.keys(SCHEMA).sort();
     assert.deepEqual(actualKeys, expectedKeys,
-      'PROJECT_FIELDS keys changed unexpectedly -- update this snapshot if the change is intentional');
+      'SCHEMA keys changed unexpectedly -- update this snapshot if the change is intentional');
   });
 
-  it('all PROJECT_FIELDS have required type and description', () => {
-    for (const [key, field] of Object.entries(PROJECT_FIELDS)) {
+  it('all SCHEMA fields have required, type, and default properties', () => {
+    for (const [key, field] of Object.entries(SCHEMA)) {
       assert.ok('required' in field, key + ' missing "required" property');
       assert.ok('type' in field, key + ' missing "type" property');
-      assert.ok('description' in field, key + ' missing "description" property');
+      assert.ok('default' in field, key + ' missing "default" property');
     }
   });
 });
