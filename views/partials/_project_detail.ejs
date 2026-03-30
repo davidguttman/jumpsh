@@ -108,12 +108,12 @@
 
 <div class="logs-section">
   <h3>Logs</h3>
-  <div class="logs-tabs" id="logs-tabs-<%= project.id %>">
-    <button class="logs-tab active" data-log-id="<%= project.id %>" data-log-label="<%= project.name %>"><%= project.name %></button>
+  <select class="logs-tab-select input" id="logs-tabs-<%= project.id %>">
+    <option value="<%= project.id %>" data-log-id="<%= project.id %>" data-log-label="<%= project.name %>"><%= project.name %></option>
     <% for (const wt of worktrees) { %>
-      <button class="logs-tab" data-log-id="<%= wt.id %>" data-log-label="<%= wt.branch_name %>"><%= wt.branch_name %></button>
+      <option value="<%= wt.id %>" data-log-id="<%= wt.id %>" data-log-label="<%= wt.branch_name %>"><%= wt.branch_name %></option>
     <% } %>
-  </div>
+  </select>
   <pre class="logs-output" id="logs-<%= project.id %>"><%= logs %></pre>
   <div class="logs-status hidden" id="logs-status-<%= project.id %>"></div>
 </div>
@@ -318,13 +318,11 @@
 
   function switchLogTab(id) {
     var logsEl = document.getElementById('logs-' + pid);
-    var tabsEl = document.getElementById('logs-tabs-' + pid);
+    var selectEl = document.getElementById('logs-tabs-' + pid);
 
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
 
-    tabsEl.querySelectorAll('.logs-tab').forEach(function(tab) {
-      tab.classList.toggle('active', tab.getAttribute('data-log-id') === String(id));
-    });
+    selectEl.value = String(id);
 
     state.activeLogId = id;
     logsEl.textContent = 'Loading logs...';
@@ -384,11 +382,9 @@
   }
 
   // --- Init ---
-  // Bind tab clicks
-  document.querySelectorAll('#logs-tabs-' + pid + ' .logs-tab').forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      switchLogTab(parseInt(tab.getAttribute('data-log-id')));
-    });
+  // Bind log source select
+  document.getElementById('logs-tabs-' + pid).addEventListener('change', function() {
+    switchLogTab(parseInt(this.value));
   });
 
   // Auto-stream main tab

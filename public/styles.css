@@ -274,10 +274,13 @@ main {
   border-color: var(--accent-gold);
   border-image: url('/assets/borders/plain.gif') 32 round;
   box-shadow: 0 0 8px rgba(216, 200, 48, 0.3);
+  overflow: hidden;
 }
 
 .project-row-detail {
   flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding-top: 1rem;
   border-top: 2px dashed var(--border-inner);
   margin-top: 0.5rem;
@@ -337,9 +340,11 @@ main {
 .project-row-worktrees {
   display: flex;
   gap: 0.4rem;
-  flex-shrink: 0;
+  flex-shrink: 1;
   align-items: center;
   margin-left: auto;
+  max-width: 50%;
+  overflow-x: auto;
 }
 
 .wt-chip {
@@ -360,6 +365,17 @@ main {
 
 .wt-chip-inactive {
   color: var(--text-muted);
+}
+
+.wt-chip-more {
+  color: var(--text-muted);
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.wt-chip-more:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
 }
 
 @keyframes pulse {
@@ -725,6 +741,7 @@ main {
 /* ---- Logs ---- */
 .logs-section {
   margin-top: 2rem;
+  overflow: hidden;
 }
 
 .logs-section h3 {
@@ -741,32 +758,10 @@ main {
   margin-bottom: 0.5rem;
 }
 
-.logs-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 0;
-}
-
-.logs-tab {
-  background: none;
-  border: 1px solid var(--border-inner);
-  border-bottom: none;
-  color: var(--text-muted);
+.logs-tab-select {
+  margin-bottom: 0.5rem;
+  max-width: 300px;
   cursor: pointer;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-  font-family: inherit;
-  border-radius: 4px 4px 0 0;
-}
-
-.logs-tab:hover {
-  color: var(--text);
-}
-
-.logs-tab.active {
-  color: var(--text-bright);
-  background: var(--bg-card-inner);
-  border-color: var(--border-inner);
 }
 
 .logs-output {
@@ -781,7 +776,6 @@ main {
   white-space: pre-wrap;
   word-wrap: break-word;
   margin-top: 0;
-  border-top-left-radius: 0;
 }
 
 #logs {
@@ -1195,52 +1189,46 @@ main {
     padding: 0.75rem;
   }
 
-  /* Worktrees table — stacked card layout */
+  /* Worktrees table — compact single-line rows */
   .worktrees-table thead {
     display: none;
   }
 
-  .worktrees-table,
-  .worktrees-table tbody,
-  .worktrees-table tr,
-  .worktrees-table td {
+  .worktrees-table {
+    display: block;
+    width: 100%;
+  }
+
+  .worktrees-table tbody {
     display: block;
     width: 100%;
   }
 
   .worktrees-table tr {
-    padding: 0.6rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 2px solid var(--border-inner);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border-inner);
   }
 
   .worktrees-table td {
-    padding: 0.15rem 0;
+    display: block;
+    padding: 0;
     border-bottom: none;
   }
 
-  /* Branch name — prominent */
-  .worktrees-table td:nth-child(1) {
+  .worktrees-table td:first-child {
     font-size: 0.85rem;
-    margin-bottom: 0.2rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  /* URL — breakable */
-  .worktrees-table td:nth-child(2) {
-    font-size: 0.7rem;
-    word-break: break-all;
-    margin-bottom: 0.3rem;
-  }
-
-  /* Status + Actions on same row */
-  .worktrees-table td:nth-child(3),
-  .worktrees-table td:nth-child(4) {
-    display: inline-block;
-    width: auto;
-  }
-
-  .worktrees-table td:nth-child(3) {
-    margin-right: 0.5rem;
+  .worktrees-table td:last-child {
+    flex-shrink: 0;
+    margin-left: 0.5rem;
   }
 }
 
