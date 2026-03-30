@@ -5,7 +5,7 @@ import net from 'net';
 import { execCompose, buildComposeSpawn, checkDockerAvailability } from './dockerCommand.js';
 import { detectProjectType } from './ProjectDetector.js';
 import { generateCompose, getJumpshDir } from './ComposeGenerator.js';
-import { projectInfo, projectWarn, projectError } from '../lib/devlog.js';
+import { projectInfo, projectError } from '../lib/devlog.js';
 
 // Timeouts (ms)
 const DOCKER_BUILD_TIMEOUT = 5 * 60 * 1000; // 5 min for up --build
@@ -34,10 +34,10 @@ function mergeEnvVars(parentJson, childJson) {
   const map = new Map();
   try {
     if (parentJson) for (const { key, value } of JSON.parse(parentJson)) map.set(key, value);
-  } catch {}
+  } catch { /* ignore */ }
   try {
     if (childJson) for (const { key, value } of JSON.parse(childJson)) map.set(key, value);
-  } catch {}
+  } catch { /* ignore */ }
   if (map.size === 0) return null;
   return JSON.stringify([...map.entries()].map(([key, value]) => ({ key, value })));
 }
@@ -85,7 +85,7 @@ function readBuildLog(slug) {
   try {
     const logPath = path.join(getJumpshDir(slug), 'build.log');
     if (fs.existsSync(logPath)) return fs.readFileSync(logPath, 'utf8');
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -201,8 +201,7 @@ class DockerManager {
   }
 
   async start(project) {
-    const { id, path: projectPath, name } = project;
-    const idStr = id.toString();
+    const idStr = project.id.toString();
 
     // Prevent double-start: if already starting, return early
     if (this._startingProjects.has(idStr)) {
@@ -245,10 +244,12 @@ class DockerManager {
           const merged = mergeEnvVars(parent.override_env, project.override_env);
           if (merged) project._mergedEnv = merged;
         }
-      } catch {}
+      } catch { /* ignore */ }
     }
 
-    let { composePath, isGenerated } = this.getComposeFile(project);
+    const composeInfo = this.getComposeFile(project);
+    let composePath = composeInfo.composePath;
+    const { isGenerated } = composeInfo;
 
     // No compose file found — try auto-generation
     if (!composePath) {

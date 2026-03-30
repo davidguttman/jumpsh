@@ -1,7 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { detectProjectType } from '../services/ProjectDetector.js';
 import { makeTmpDir, writeJson, touchFile, writeFile, cleanTmpDir } from './helpers/fixtures.js';

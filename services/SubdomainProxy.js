@@ -38,7 +38,7 @@ class SubdomainProxy {
 
   middleware() {
     return async (req, res, next) => {
-      let host = req.get('host');
+      const host = req.get('host');
       if (!host) return next();
 
       let subdomain = this.extractSubdomain(host);
@@ -48,7 +48,6 @@ class SubdomainProxy {
       if (!subdomain || subdomain === 'localhost') {
         const fwdHost = req.get('x-forwarded-host');
         if (fwdHost) {
-          host = fwdHost;
           subdomain = this.extractSubdomain(fwdHost);
         }
       }
@@ -64,12 +63,10 @@ class SubdomainProxy {
       });
 
       // Context-host decode fallback: try splitting on '--'
-      let isContextRoute = false;
       if (!project && subdomain.includes('--')) {
         const resolved = await this._resolveEncodedSubdomain(subdomain);
         if (resolved) {
           project = resolved.project;
-          isContextRoute = resolved.isContext;
         }
       }
 
@@ -106,7 +103,7 @@ class SubdomainProxy {
       // Mock container: serve placeholder instead of proxying
       if (this.docker.isMock) {
         let detection = {};
-        try { detection = detectProjectType(project.path); } catch {}
+        try { detection = detectProjectType(project.path); } catch { /* ignore */ }
         const name = escapeHtml(project.name);
         const type = escapeHtml(detection.type || 'unknown');
         const framework = escapeHtml(detection.framework || 'none');
@@ -153,7 +150,7 @@ class SubdomainProxy {
 
   attachUpgrade(server) {
     server.on('upgrade', async (req, socket, head) => {
-      let host = req.headers.host;
+      const host = req.headers.host;
       if (!host) return socket.destroy();
 
       let subdomain = this.extractSubdomain(host);
@@ -161,7 +158,6 @@ class SubdomainProxy {
       if (!subdomain || subdomain === 'localhost') {
         const fwdHost = req.headers['x-forwarded-host'];
         if (fwdHost) {
-          host = fwdHost;
           subdomain = this.extractSubdomain(fwdHost);
         }
       }

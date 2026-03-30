@@ -16,6 +16,8 @@
     "test:lifecycle": "scripts/e2e-lifecycle.sh",
     "api:install": "cd api && npm install",
     "api:start": "node api/server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "prepare": "scripts/install-hooks.sh"
   },
   "keywords": [
@@ -57,6 +59,8 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
     "nodemon": "^3.1.0",
     "ws": "^8.19.0"
   }

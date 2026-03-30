@@ -249,7 +249,7 @@ function buildPythonInstall(markerFile) {
   return 'pip install -r requirements.txt';
 }
 
-function findPythonEntrypoint(projectPath, frameworkClass) {
+function findPythonEntrypoint(projectPath, _frameworkClass) {
   // Search common files for `app = FastAPI()` pattern
   const candidates = ['main.py', 'app.py', 'server.py', 'api.py'];
   for (const file of candidates) {

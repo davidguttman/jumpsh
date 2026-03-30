@@ -179,7 +179,7 @@ CMD ${formatCmd(detection.devCommand)}
  * with shell metacharacters (pipes, redirects, &&, etc.)
  */
 function formatCmd(devCommand) {
-  if (/[|&;<>\`$"'\\]/.test(devCommand)) {
+  if (/[|&;<>`$"'\\]/.test(devCommand)) {
     // Shell metacharacters present — use shell form so sh interprets them
     return `["sh", "-c", ${JSON.stringify(devCommand)}]`;
   }
