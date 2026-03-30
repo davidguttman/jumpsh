@@ -69,13 +69,16 @@
             </span>
             <% if (worktrees.length > 0) { %>
               <span class="project-row-worktrees">
-                <% for (const wt of worktrees) { %>
+                <% for (let i = 0; i < Math.min(worktrees.length, 3); i++) { const wt = worktrees[i]; %>
                   <% const wtHealth = wt.health || 'unknown'; %>
                   <% if (wtHealth === 'healthy') { %>
                     <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank" class="wt-chip"><%= wt.branch_name %></a>
                   <% } else { %>
                     <span class="wt-chip wt-chip-inactive"><%= wt.branch_name %></span>
                   <% } %>
+                <% } %>
+                <% if (worktrees.length > 3) { %>
+                  <a href="#" class="wt-chip wt-chip-more" @click.prevent="toggle('<%= project.name %>', '<%= project.id %>')">+<%= worktrees.length - 3 %> more</a>
                 <% } %>
               </span>
             <% } %>
