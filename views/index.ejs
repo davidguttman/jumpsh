@@ -28,6 +28,7 @@
         <input class="input controls-filter" type="text" placeholder="filter projects..." x-model="filter" autocapitalize="off">
         <% if (projects.length >= 6) { %>
         <select class="input controls-sort" x-model="sort" x-on:change="$nextTick(() => {
+          localStorage.setItem('jumpsh-sort', sort);
           const list = $el.closest('main').querySelector('.project-list');
           const rows = [...list.querySelectorAll('[data-project-name]')];
           rows.sort((a, b) => {
@@ -109,6 +110,23 @@
           var projectIds = <%- JSON.stringify(projects.reduce(function(m, p) { m[p.name] = p.id; return m; }, {})) %>;
           this._projectIds = projectIds;
           this._singleProject = singleProject;
+
+          // Restore persisted sort preference
+          var savedSort = localStorage.getItem('jumpsh-sort');
+          if (savedSort && (savedSort === 'name' || savedSort === 'status')) {
+            this.sort = savedSort;
+            this.$nextTick(() => {
+              var list = this.$el.querySelector('.project-list');
+              if (list) {
+                var rows = [...list.querySelectorAll('[data-project-name]')];
+                rows.sort((a, b) => {
+                  if (savedSort === 'status') return (a.dataset.projectStatus || '').localeCompare(b.dataset.projectStatus || '');
+                  return (a.dataset.projectName || '').localeCompare(b.dataset.projectName || '');
+                });
+                rows.forEach(row => list.appendChild(row));
+              }
+            });
+          }
 
           var expandTarget = initialExpand || singleProject;
           if (expandTarget && projectIds[expandTarget]) {
