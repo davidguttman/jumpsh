@@ -1,6 +1,6 @@
 {
   "name": "jump.sh",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "type": "module",
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
   "main": "server.js",
@@ -16,7 +16,7 @@
     "test:lifecycle": "scripts/e2e-lifecycle.sh",
     "api:install": "cd api && npm install",
     "api:start": "node api/server.js",
-"lint": "eslint .",
+    "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prepare": "scripts/install-hooks.sh"
   },
@@ -59,7 +59,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-"@eslint/js": "^10.0.1",
+    "@eslint/js": "^10.0.1",
     "eslint": "^10.1.0",
     "nodemon": "^3.1.0",
     "ws": "^8.19.0"
