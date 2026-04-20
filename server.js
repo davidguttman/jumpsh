@@ -651,10 +651,6 @@ app.get('/api/detect', (req, res) => {
 app.get('/api/browse', (req, res) => {
   const requestedPath = req.query.path || '/';
   const resolved = path.resolve(requestedPath);
-  const homeDir = os.homedir();
-  if (!resolved.startsWith(homeDir) && resolved !== "/") {
-    return res.status(403).json({ error: "Browsing is restricted to your home directory" });
-  }
 
   try {
     const entries = fs.readdirSync(resolved, { withFileTypes: true });
