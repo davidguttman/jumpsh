@@ -181,6 +181,23 @@ describe('ProjectDetector framework detection', () => {
     assert.equal(r.framework, null);
   });
 
+  it('detects SvelteKit via @sveltejs/kit dependency', () => {
+    writeJson(tmpDir, 'package.json', { devDependencies: { '@sveltejs/kit': '*', svelte: '*', vite: '*' } });
+    const r = detectProjectType(tmpDir);
+    assert.equal(r.type, 'node');
+    assert.equal(r.framework, 'sveltekit');
+    assert.equal(r.port, 5173);
+    assert.match(r.devCommand, /--host/);
+  });
+
+  it('prioritises sveltekit over vite when both present', () => {
+    writeJson(tmpDir, 'package.json', {
+      devDependencies: { '@sveltejs/kit': '*', vite: '*' },
+    });
+    const r = detectProjectType(tmpDir);
+    assert.equal(r.framework, 'sveltekit');
+  });
+
   it('prioritises astro over vite when both present', () => {
     writeJson(tmpDir, 'package.json', {
       dependencies: { astro: '*', vite: '*' },

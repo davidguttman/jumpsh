@@ -156,6 +156,9 @@ function detectNode(projectPath) {
   if (deps.astro) {
     return { type: 'node', framework: 'astro', devCommand: `${pm.run} dev -- --host`, port: 4321, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
+  if (deps['@sveltejs/kit']) {
+    return { type: 'node', framework: 'sveltekit', devCommand: `${pm.run} dev -- --host`, port: 5173, packageManager: pm, installCommand: pm.install, dockerImage: image };
+  }
   if (deps.vite || (scripts.dev && scripts.dev.includes('vite'))) {
     return { type: 'node', framework: 'vite', devCommand: `${pm.run} dev -- --host`, port: 5173, packageManager: pm, installCommand: pm.install, dockerImage: image };
   }
