@@ -47,10 +47,29 @@ jump.sh certs              Download TLS certificates
 jump.sh ls                 List projects with status
 jump.sh start [name]       Start project containers
 jump.sh stop [name]        Stop project containers
+jump.sh restart [name]     Restart project containers
 jump.sh logs [name]        Tail project logs
+jump.sh status             Show daemon and domain status
 jump.sh ip                 Print LAN IP address
 jump.sh register           Register machine for remote routing
 ```
+
+### Agent / Scripting Mode
+
+Most commands accept `--json` for machine-readable output:
+
+```bash
+jump.sh ls --json                       # all projects + status
+jump.sh status --json                   # daemon and domain status
+jump.sh start my-app --json             # start, JSON result
+jump.sh stop my-app --json              # stop, JSON result
+jump.sh restart my-app --json           # restart, JSON result
+jump.sh add . --json                    # detection only (dry-run)
+jump.sh add . --json --yes              # create project + JSON result
+```
+
+When run inside a registered project's directory, `start`, `stop`, `restart`,
+and `logs` resolve the project from `cwd` automatically — no name required.
 
 ## Configuration
 
