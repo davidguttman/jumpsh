@@ -21,7 +21,7 @@ jump.sh add [path] [options]
 | `--image` | | string | Docker image override |
 | `--env` | `-e` | string | Environment variable `KEY=value` (repeatable) |
 | `--yes` | `-y` | boolean | Skip confirmation prompt |
-| `--json` | | boolean | Output detection result as JSON (no create) |
+| `--json` | | boolean | Emit JSON. Without `--yes`: detection only. With `--yes`: create + JSON result. |
 | `--help` | `-h` | boolean | Show help |
 
 ## Examples
@@ -36,9 +36,14 @@ jump.sh add .
 jump.sh add . --name my-app --yes
 ```
 
-### Detection only (for LLMs/agents)
+### Detection only (dry-run, for LLMs/agents)
 ```bash
 jump.sh add . --json
+```
+
+### Create + JSON result (for LLMs/agents)
+```bash
+jump.sh add . --name my-app --json --yes
 ```
 
 ### Full override
@@ -56,7 +61,7 @@ jump.sh add . \
 
 ## JSON Output Format
 
-When using `--json`, the output is:
+### Detect (`--json` without `--yes`)
 
 ```json
 {
@@ -74,6 +79,32 @@ When using `--json`, the output is:
     "name": "my-project",
     "subdomain": "my-project"
   }
+}
+```
+
+### Create (`--json --yes`)
+
+```json
+{
+  "ok": true,
+  "action": "add",
+  "id": 7,
+  "name": "my-project",
+  "subdomain": "my-project",
+  "path": "/absolute/path/to/project",
+  "url": "https://my-project.jump.sh",
+  "detected": { "...": "..." }
+}
+```
+
+On failure (daemon not running, duplicate, etc.):
+
+```json
+{
+  "ok": false,
+  "action": "add",
+  "error": "...",
+  "code": "DAEMON_NOT_RUNNING | DUPLICATE_PATH | DUPLICATE_NAME | ..."
 }
 ```
 

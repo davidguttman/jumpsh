@@ -112,7 +112,11 @@ describe('CLI add', () => {
   it('add with invalid path shows error', () => {
     const r = runCli(['add', '/nonexistent/path/that/does/not/exist', '--json']);
     assert.notEqual(r.exitCode, 0);
-    assert.ok(r.stderr.includes('Error'));
+    // --json (dry-run) routes errors to stdout as JSON
+    const parsed = JSON.parse(r.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'add');
+    assert.ok(parsed.error);
   });
 
   it('add --json for empty dir shows error', () => {
@@ -120,17 +124,105 @@ describe('CLI add', () => {
     try {
       const r = runCli(['add', tmpDir, '--json']);
       assert.notEqual(r.exitCode, 0);
-      assert.ok(r.stderr.includes('Error'));
+      const parsed = JSON.parse(r.stdout);
+      assert.equal(parsed.ok, false);
+      assert.equal(parsed.code, 'DETECT_FAILED');
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it('add without daemon shows daemon-not-running error', () => {
-    // Use --yes to skip confirmation, daemon won't be running in test
-    const projectDir = path.join(__dirname, '..');
-    const r = runCli(['add', projectDir, '--name', 'test-proj', '--yes']);
+  // NOTE: any add test that uses --yes must point at a path that fails
+  // detection BEFORE the daemon call, otherwise it will create a real
+  // project on a host where the daemon is running.
+
+  it('add --yes against unfit path errors out before touching daemon', () => {
+    // Nonexistent path → detect fails → no daemon call, no creation.
+    const r = runCli(['add', '/nonexistent/path/that/does/not/exist', '--yes']);
     assert.notEqual(r.exitCode, 0);
-    assert.ok(r.stderr.includes('daemon') || r.stderr.includes('not running') || r.stderr.includes('Error'));
+    assert.ok(r.stderr.includes('Error'));
+  });
+
+  it('add --json --yes against unfit path emits JSON failure (no daemon call)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-test-'));
+    try {
+      const r = runCli(['add', tmpDir, '--yes', '--json']);
+      assert.notEqual(r.exitCode, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.equal(parsed.ok, false);
+      assert.equal(parsed.action, 'add');
+      assert.equal(parsed.code, 'DETECT_FAILED');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+});
+
+describe('CLI start/stop/restart', () => {
+  for (const cmd of ['start', 'stop', 'restart']) {
+    it(`${cmd} --help prints help and exits 0`, () => {
+      const r = runCli([cmd, '--help']);
+      assert.equal(r.exitCode, 0);
+      assert.ok(r.stdout.includes(`jump.sh ${cmd}`));
+      assert.ok(r.stdout.includes('--json'));
+    });
+
+    it(`${cmd} -h also prints help`, () => {
+      const r = runCli([cmd, '-h']);
+      assert.equal(r.exitCode, 0);
+      assert.ok(r.stdout.includes(`jump.sh ${cmd}`));
+    });
+
+    it(`${cmd} --json for unknown project emits JSON error`, () => {
+      // Project name guaranteed not to exist; works whether or not the
+      // daemon is running (NOT_FOUND vs DAEMON_NOT_RUNNING).
+      const r = runCli([cmd, '__definitely_not_a_real_project__', '--json']);
+      assert.notEqual(r.exitCode, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.equal(parsed.ok, false);
+      assert.equal(parsed.action, cmd);
+      assert.ok(['DAEMON_NOT_RUNNING', 'NOT_FOUND'].includes(parsed.code), `unexpected code ${parsed.code}`);
+    });
+
+    it(`${cmd} for unknown project prints text error`, () => {
+      const r = runCli([cmd, '__definitely_not_a_real_project__']);
+      assert.notEqual(r.exitCode, 0);
+      assert.ok(r.stderr.includes('Error') || r.stderr.includes('daemon') || r.stderr.includes('not'));
+    });
+  }
+});
+
+describe('CLI ls --json', () => {
+  it('ls --help mentions --json', () => {
+    const r = runCli(['ls', '--help']);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.stdout.includes('--json'));
+  });
+
+  it('ls --json emits JSON object with projects array', () => {
+    const r = runCli(['ls', '--json']);
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout);
+    assert.ok(Array.isArray(parsed.projects));
+    assert.equal(typeof parsed.dockerAvailable, 'boolean');
+  });
+});
+
+describe('CLI status --json', () => {
+  it('status --help mentions --json', () => {
+    const r = runCli(['status', '--help']);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.stdout.includes('--json'));
+  });
+
+  it('status --json emits valid JSON with daemon field', () => {
+    const r = runCli(['status', '--json']);
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout);
+    assert.ok('installed' in parsed);
+    assert.ok('daemon' in parsed);
+    assert.ok('domain' in parsed);
+    assert.ok('dashboard' in parsed);
+    assert.equal(typeof parsed.running, 'boolean');
   });
 });
