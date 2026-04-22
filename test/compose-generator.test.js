@@ -109,6 +109,106 @@ describe('generateCompose Node projects', () => {
   });
 });
 
+describe('generateCompose Node workspaces', () => {
+  it('copies workspace package.json files before npm install (array form)', () => {
+    writeJson(projectDir, 'package.json', {
+      name: 'root',
+      private: true,
+      workspaces: ['client'],
+      scripts: { dev: 'npm run dev --workspace client' },
+    });
+    fs.mkdirSync(path.join(projectDir, 'client'));
+    writeJson(path.join(projectDir, 'client'), 'package.json', {
+      name: 'client',
+      scripts: { dev: 'vite' },
+      devDependencies: { vite: '^5.0.0' },
+    });
+
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'npm run dev --workspace client',
+      port: 5173,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: 'package-lock.json' },
+    };
+    const result = generateCompose(projectDir, 'test-workspaces', detection, 10000, { force: true });
+    const dockerfile = fs.readFileSync(result.dockerfilePath, 'utf8');
+
+    const copyWsIdx = dockerfile.indexOf('COPY client/package.json client/package.json');
+    const runInstallIdx = dockerfile.indexOf('RUN npm install');
+    assert.ok(copyWsIdx !== -1, 'expected workspace package.json COPY line');
+    assert.ok(runInstallIdx !== -1, 'expected RUN npm install line');
+    assert.ok(copyWsIdx < runInstallIdx, 'workspace COPY must come before install');
+  });
+
+  it('resolves glob workspace patterns like packages/*', () => {
+    writeJson(projectDir, 'package.json', {
+      name: 'root',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+    fs.mkdirSync(path.join(projectDir, 'packages'));
+    fs.mkdirSync(path.join(projectDir, 'packages', 'a'));
+    fs.mkdirSync(path.join(projectDir, 'packages', 'b'));
+    writeJson(path.join(projectDir, 'packages', 'a'), 'package.json', { name: 'a' });
+    writeJson(path.join(projectDir, 'packages', 'b'), 'package.json', { name: 'b' });
+    // directory without a package.json should be skipped
+    fs.mkdirSync(path.join(projectDir, 'packages', 'no-manifest'));
+
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'npm run dev',
+      port: 3000,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: 'package-lock.json' },
+    };
+    const result = generateCompose(projectDir, 'test-glob-ws', detection, 10000, { force: true });
+    const dockerfile = fs.readFileSync(result.dockerfilePath, 'utf8');
+
+    assert.ok(dockerfile.includes('COPY packages/a/package.json packages/a/package.json'));
+    assert.ok(dockerfile.includes('COPY packages/b/package.json packages/b/package.json'));
+    assert.ok(!dockerfile.includes('no-manifest'));
+  });
+
+  it('supports workspaces object form ({ packages: [...] })', () => {
+    writeJson(projectDir, 'package.json', {
+      name: 'root',
+      private: true,
+      workspaces: { packages: ['apps/web'] },
+    });
+    fs.mkdirSync(path.join(projectDir, 'apps'));
+    fs.mkdirSync(path.join(projectDir, 'apps', 'web'));
+    writeJson(path.join(projectDir, 'apps', 'web'), 'package.json', { name: 'web' });
+
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'npm run dev',
+      port: 3000,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: 'package-lock.json' },
+    };
+    const result = generateCompose(projectDir, 'test-obj-ws', detection, 10000, { force: true });
+    const dockerfile = fs.readFileSync(result.dockerfilePath, 'utf8');
+
+    assert.ok(dockerfile.includes('COPY apps/web/package.json apps/web/package.json'));
+  });
+
+  it('omits workspace COPY lines when no workspaces field present', () => {
+    writeJson(projectDir, 'package.json', { name: 'root', dependencies: {} });
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'node index.js',
+      port: 3000,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: 'package-lock.json' },
+    };
+    const result = generateCompose(projectDir, 'test-no-ws', detection, 10000, { force: true });
+    const dockerfile = fs.readFileSync(result.dockerfilePath, 'utf8');
+
+    assert.ok(!/COPY \S+\/package\.json \S+\/package\.json/.test(dockerfile));
+  });
+});
+
 describe('generateCompose Python projects', () => {
   it('generates Dockerfile with pip install for requirements.txt', () => {
     const detection = { type: 'python', framework: 'flask', devCommand: 'flask run', port: 5000, installCommand: 'pip install -r requirements.txt' };
