@@ -5,14 +5,14 @@ import { promisify } from 'util';
 import slugify from 'slugify';
 
 const execAsync = promisify(exec);
-const RESTART_DEBOUNCE_MS = 300;
+const INSTALL_DEBOUNCE_MS = 300;
 
 class WorktreeScanner {
   constructor(db, docker) {
     this.db = db;
     this.docker = docker;
     this.watchers = new Map(); // projectId -> Map(watcherKey -> FSWatcher)
-    this.restartTimers = new Map(); // targetId -> Timeout
+    this.installTimers = new Map(); // targetId -> Timeout
   }
 
   _getOrCreateWatcherMap(projectId) {
@@ -33,20 +33,20 @@ class WorktreeScanner {
     map.delete(key);
   }
 
-  // Debounced restart so a flurry of writes (editor save → npm install rewrites)
-  // produces a single container restart.
-  _scheduleRestart(target) {
+  // Debounced install so a flurry of writes (editor save → npm install rewrites)
+  // produces a single dependency install.
+  _scheduleInstall(target) {
     const id = target.id;
-    const existing = this.restartTimers.get(id);
+    const existing = this.installTimers.get(id);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
-      this.restartTimers.delete(id);
-      console.log(`Restarting ${target.name} due to package.json change`);
-      Promise.resolve(this.docker.restart(target)).catch((err) => {
-        console.error(`Error restarting ${target.name}:`, err.message);
+      this.installTimers.delete(id);
+      console.log(`Installing dependencies for ${target.name} due to package.json change`);
+      Promise.resolve(this.docker.installDependencies(target)).catch((err) => {
+        console.error(`Error installing dependencies for ${target.name}:`, err.message);
       });
-    }, RESTART_DEBOUNCE_MS);
-    this.restartTimers.set(id, timer);
+    }, INSTALL_DEBOUNCE_MS);
+    this.installTimers.set(id, timer);
   }
 
   _watchPackageJson(projectId, key, filePath, onChange) {
@@ -71,7 +71,7 @@ class WorktreeScanner {
     const rootPackageJson = path.join(project.path, 'package.json');
     this._watchPackageJson(project.id, 'package.json', rootPackageJson, () => {
       console.log(`package.json changed for ${project.name}`);
-      this._scheduleRestart(project);
+      this._scheduleInstall(project);
     });
 
     // Watch .worktrees directory for new/removed worktrees
@@ -122,7 +122,7 @@ class WorktreeScanner {
       const wtPackageJson = path.join(wt.path, 'package.json');
       this._watchPackageJson(project.id, key, wtPackageJson, () => {
         console.log(`package.json changed for worktree ${wt.name}`);
-        this._scheduleRestart(wt);
+        this._scheduleInstall(wt);
       });
     }
   }
@@ -228,10 +228,10 @@ class WorktreeScanner {
     }
     this.watchers.clear();
 
-    for (const timer of this.restartTimers.values()) {
+    for (const timer of this.installTimers.values()) {
       clearTimeout(timer);
     }
-    this.restartTimers.clear();
+    this.installTimers.clear();
   }
 }
 

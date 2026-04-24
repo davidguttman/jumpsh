@@ -432,6 +432,47 @@ class DockerManager {
   }
 
   /**
+   * Install dependencies in the running container without restarting.
+   * Detects the package manager from lock files in the project path.
+   */
+  async installDependencies(project) {
+    const status = await this.getStatus(project);
+    if (!status.running) {
+      return { success: false, error: 'Container not running' };
+    }
+
+    const { composePath } = this.getComposeFile(project);
+    if (!composePath) {
+      return { success: false, error: 'No compose file found' };
+    }
+
+    const projectPath = project.path;
+    let installCmd;
+    if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) {
+      installCmd = ['pnpm', 'install'];
+    } else if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
+      installCmd = ['yarn', 'install'];
+    } else if (fs.existsSync(path.join(projectPath, 'bun.lockb'))) {
+      installCmd = ['bun', 'install'];
+    } else {
+      installCmd = ['npm', 'install'];
+    }
+
+    try {
+      const { stdout, stderr } = await execCompose(
+        ['exec', 'app', ...installCmd],
+        composePath,
+        { cwd: projectPath, timeout: DOCKER_BUILD_TIMEOUT }
+      );
+      projectInfo(projectPath, `Installed dependencies (${installCmd.join(' ')})`, { name: project.name });
+      return { success: true, stdout, stderr };
+    } catch (error) {
+      projectError(projectPath, 'Dependency install failed', { name: project.name, error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Full cleanup: remove containers + volumes, and delete generated compose dir.
    * Used when a project is being deleted.
    */
