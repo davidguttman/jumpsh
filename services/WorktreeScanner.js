@@ -29,7 +29,7 @@ class WorktreeScanner {
     if (!map) return;
     const watcher = map.get(key);
     if (!watcher) return;
-    try { watcher.close(); } catch {}
+    try { watcher.close(); } catch { /* watcher already closed */ }
     map.delete(key);
   }
 
@@ -99,7 +99,7 @@ class WorktreeScanner {
     const map = this.watchers.get(projectId);
     if (!map) return;
     for (const watcher of map.values()) {
-      try { watcher.close(); } catch {}
+      try { watcher.close(); } catch { /* watcher already closed */ }
     }
     this.watchers.delete(projectId);
   }
@@ -223,7 +223,7 @@ class WorktreeScanner {
   cleanup() {
     for (const map of this.watchers.values()) {
       for (const watcher of map.values()) {
-        try { watcher.close(); } catch {}
+        try { watcher.close(); } catch { /* watcher already closed */ }
       }
     }
     this.watchers.clear();
