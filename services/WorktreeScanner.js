@@ -50,9 +50,9 @@ class WorktreeScanner {
   }
 
   _watchPackageJson(projectId, key, filePath, onChange) {
+    if (!fs.existsSync(filePath)) return;
     const map = this._getOrCreateWatcherMap(projectId);
     if (map.has(key)) return;
-    if (!fs.existsSync(filePath)) return;
     try {
       const watcher = fs.watch(filePath, { persistent: false }, () => {
         onChange();
@@ -60,13 +60,12 @@ class WorktreeScanner {
       map.set(key, watcher);
     } catch (error) {
       console.error(`Error watching ${filePath}:`, error.message);
+      if (map.size === 0) this.watchers.delete(projectId);
     }
   }
 
   // Start watching a project's .worktrees directory and package.json files
   watchProject(project) {
-    const map = this._getOrCreateWatcherMap(project.id);
-
     // Watch root package.json (only set up if it exists — naturally limits to Node.js projects)
     const rootPackageJson = path.join(project.path, 'package.json');
     this._watchPackageJson(project.id, 'package.json', rootPackageJson, () => {
@@ -76,7 +75,8 @@ class WorktreeScanner {
 
     // Watch .worktrees directory for new/removed worktrees
     const worktreesDir = path.join(project.path, '.worktrees');
-    if (fs.existsSync(worktreesDir) && !map.has('worktrees')) {
+    const map = this.watchers.get(project.id);
+    if (fs.existsSync(worktreesDir) && !map?.has('worktrees')) {
       console.log(`Watching worktrees for ${project.name}: ${worktreesDir}`);
 
       // Initial scan also wires up per-worktree package.json watchers
@@ -87,7 +87,7 @@ class WorktreeScanner {
           console.log(`Worktree change detected: ${eventType} ${filename}`);
           this.scanWorktrees(project);
         });
-        map.set('worktrees', watcher);
+        this._getOrCreateWatcherMap(project.id).set('worktrees', watcher);
       } catch (error) {
         console.error(`Error watching ${worktreesDir}:`, error.message);
       }
@@ -105,14 +105,17 @@ class WorktreeScanner {
   }
 
   _syncWorktreePackageWatchers(project, activeWorktrees) {
-    const map = this._getOrCreateWatcherMap(project.id);
+    const map = this.watchers.get(project.id);
+    if (!map && activeWorktrees.length === 0) return;
 
     const desiredKeys = new Set(activeWorktrees.map(wt => `worktree:${wt.path}`));
 
     // Remove watchers for worktrees that no longer exist
-    for (const key of [...map.keys()]) {
-      if (key.startsWith('worktree:') && !desiredKeys.has(key)) {
-        this._closeWatcher(project.id, key);
+    if (map) {
+      for (const key of [...map.keys()]) {
+        if (key.startsWith('worktree:') && !desiredKeys.has(key)) {
+          this._closeWatcher(project.id, key);
+        }
       }
     }
 
