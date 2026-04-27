@@ -326,6 +326,46 @@ describe('generateCompose .dockerignore', () => {
   });
 });
 
+describe('generateCompose parent env inheritance', () => {
+  it('inherits parent .env when worktree has none', () => {
+    const parentDir = path.join(tmpHome, 'parent-project');
+    fs.mkdirSync(parentDir);
+    writeFile(parentDir, '.env', 'XAI_API_KEY=secret\nDB=localhost\n');
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+    const slug = 'test-wt-inherit';
+    const result = generateCompose(projectDir, slug, detection, 10000, {
+      force: true,
+      parentEnvPath: path.join(parentDir, '.env'),
+    });
+    const envDocker = fs.readFileSync(path.join(getJumpshDir(slug), '.env.docker'), 'utf8');
+    assert.ok(envDocker.includes('XAI_API_KEY=secret'));
+    assert.ok(envDocker.includes('DB=host.docker.internal'));
+    const compose = fs.readFileSync(result.composePath, 'utf8');
+    assert.ok(compose.includes(path.join(parentDir, '.env')));
+  });
+
+  it('prefers worktree .env over parent .env when both exist', () => {
+    const parentDir = path.join(tmpHome, 'parent-project2');
+    fs.mkdirSync(parentDir);
+    writeFile(parentDir, '.env', 'KEY=parent\n');
+    writeFile(projectDir, '.env', 'KEY=child\n');
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+    const slug = 'test-wt-prefer-own';
+    const result = generateCompose(projectDir, slug, detection, 10000, {
+      force: true,
+      parentEnvPath: path.join(parentDir, '.env'),
+    });
+    const envDocker = fs.readFileSync(path.join(getJumpshDir(slug), '.env.docker'), 'utf8');
+    assert.ok(envDocker.includes('KEY=child'));
+    assert.ok(!envDocker.includes('KEY=parent'));
+    const compose = fs.readFileSync(result.composePath, 'utf8');
+    assert.ok(compose.includes(path.join(projectDir, '.env')));
+    assert.ok(!compose.includes(path.join(parentDir, '.env')));
+  });
+});
+
 describe('generateCompose error case', () => {
   it('throws for unsupported type', () => {
     assert.throws(() => {

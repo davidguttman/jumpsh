@@ -46,10 +46,14 @@ export function generateCompose(projectPath, slug, detection, assignedPort, opts
 
   // Generate transformed env file for Docker runtime:
   // rewrite localhost/127.0.0.1 to host.docker.internal so services on host are reachable.
-  const projectEnvPath = path.join(projectPath, '.env');
-  if (fs.existsSync(projectEnvPath)) {
+  // For worktrees without their own .env, fall back to the parent project's .env.
+  const ownEnvPath = path.join(projectPath, '.env');
+  const envSourcePath = fs.existsSync(ownEnvPath)
+    ? ownEnvPath
+    : (opts.parentEnvPath && fs.existsSync(opts.parentEnvPath) ? opts.parentEnvPath : null);
+  if (envSourcePath) {
     try {
-      const raw = fs.readFileSync(projectEnvPath, 'utf8');
+      const raw = fs.readFileSync(envSourcePath, 'utf8');
       const transformed = raw
         .split('\n')
         .map((line) => {
@@ -91,7 +95,7 @@ export function generateCompose(projectPath, slug, detection, assignedPort, opts
 
   // Static sites use pre-built images — no Dockerfile needed
   const needsDockerfile = detection.type !== 'static';
-  const compose = generateComposeYaml(detection, assignedPort, projectPath, jumpshDir);
+  const compose = generateComposeYaml(detection, assignedPort, projectPath, jumpshDir, { envSourcePath });
 
   if (needsDockerfile) {
     const dockerfile = generateDockerfile(detection, projectPath);
@@ -293,7 +297,7 @@ COPY . .${cmd}
 `;
 }
 
-function generateComposeYaml(detection, assignedPort, projectPath, jumpshDir) {
+function generateComposeYaml(detection, assignedPort, projectPath, jumpshDir, opts = {}) {
   const internalPort = detection.port;
 
   // Static sites: use nginx image directly, mount project to nginx html dir
@@ -353,10 +357,14 @@ services:
     ? `\n    environment:\n${envVars.join('\n')}`
     : '';
 
-  // Only include env_file entries for files that exist (use absolute paths)
+  // Only include env_file entries for files that exist (use absolute paths).
+  // For worktrees, inherit the parent's .env when the worktree has none.
   const envFiles = [];
-  if (fs.existsSync(path.join(projectPath, '.env'))) {
-    envFiles.push(`      - ${path.join(projectPath, '.env')}`);
+  const ownEnv = path.join(projectPath, '.env');
+  if (fs.existsSync(ownEnv)) {
+    envFiles.push(`      - ${ownEnv}`);
+  } else if (opts.envSourcePath && fs.existsSync(opts.envSourcePath)) {
+    envFiles.push(`      - ${opts.envSourcePath}`);
   }
   if (fs.existsSync(path.join(jumpshDir, '.env.docker'))) {
     envFiles.push(`      - ${path.join(jumpshDir, '.env.docker')}`);

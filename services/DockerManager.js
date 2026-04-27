@@ -223,29 +223,27 @@ class DockerManager {
       return { success: false, error: dockerCheck.error };
     }
 
-    // For worktrees, inherit overrides from parent project
-    if (project.is_worktree && project.parent_project_id && this.db) {
+    // For worktrees, inherit overrides and (when missing) env file from parent project
+    let parentEnvPath = null;
+    if (project.parent_project_id && this.db) {
       const parent = await new Promise((resolve) => {
         this.db.getProject(project.parent_project_id, (err, p) => resolve(err ? null : p));
       });
-      project = mergeParentOverrides(project, parent);
+      if (parent) {
+        if (project.is_worktree) {
+          project = mergeParentOverrides(project, parent);
+        }
+        const merged = mergeEnvVars(parent.override_env, project.override_env);
+        if (merged) project._mergedEnv = merged;
+        if (parent.path) {
+          const candidate = path.join(parent.path, '.env');
+          if (fs.existsSync(candidate)) parentEnvPath = candidate;
+        }
+      }
     }
 
     const { id, path: projectPath, name } = project;
     const slug = getProjectSlug(project);
-
-    // Worktrees inherit env overrides from parent, merged with their own
-    if (project.parent_project_id && this.db) {
-      try {
-        const parent = await new Promise((resolve, reject) => {
-          this.db.getProject(project.parent_project_id, (err, p) => err ? reject(err) : resolve(p));
-        });
-        if (parent) {
-          const merged = mergeEnvVars(parent.override_env, project.override_env);
-          if (merged) project._mergedEnv = merged;
-        }
-      } catch { /* ignore */ }
-    }
 
     const composeInfo = this.getComposeFile(project);
     let composePath = composeInfo.composePath;
@@ -287,7 +285,7 @@ class DockerManager {
 
       try {
         const overrides = getOverrides(project);
-        const result = generateCompose(projectPath, slug, detection, assignedPort, { overrides });
+        const result = generateCompose(projectPath, slug, detection, assignedPort, { overrides, parentEnvPath });
         composePath = result.composePath;
         if (result.skipped) {
           console.log(`Using existing ~/.jump.sh/${slug}/docker-compose.yml for ${name}`);
@@ -327,7 +325,7 @@ class DockerManager {
 
       try {
         const overrides = getOverrides(project);
-        const refreshed = generateCompose(projectPath, slug, detection, assignedPort, { force: true, overrides });
+        const refreshed = generateCompose(projectPath, slug, detection, assignedPort, { force: true, overrides, parentEnvPath });
         composePath = refreshed.composePath;
       } catch (err) {
         return { success: false, error: `Compose refresh failed: ${err.message}` };
@@ -372,7 +370,7 @@ class DockerManager {
           // Regenerate compose with new port
           const detection = detectProjectType(projectPath);
           const overrides = getOverrides(project);
-          generateCompose(projectPath, slug, detection, newPort, { force: true, overrides });
+          generateCompose(projectPath, slug, detection, newPort, { force: true, overrides, parentEnvPath });
           console.log(`Retrying with port ${newPort}...`);
           // Retry once
           this._emitStartup(id, { step: 1, totalSteps: TOTAL_STEPS, label: STEP_LABELS[1] });
