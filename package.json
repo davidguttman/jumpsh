@@ -1,11 +1,11 @@
 {
   "name": "jump.sh",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "type": "module",
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
   "main": "server.js",
   "bin": {
-    "jump.sh": "./bin/jumpsh.js"
+    "jump.sh": "bin/jumpsh.js"
   },
   "scripts": {
     "start": "node server.js",
