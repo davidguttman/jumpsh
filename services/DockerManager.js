@@ -216,6 +216,11 @@ class DockerManager {
     }
   }
 
+  isStarting(projectOrId) {
+    const id = typeof projectOrId === 'object' ? projectOrId?.id : projectOrId;
+    return this._startingProjects.has(id?.toString());
+  }
+
   async _doStart(project) {
     // Check Docker availability before attempting anything
     const dockerCheck = await checkDockerAvailability();

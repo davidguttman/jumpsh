@@ -134,6 +134,11 @@ class MockDockerManager {
     }
   }
 
+  isStarting(projectOrId) {
+    const id = typeof projectOrId === 'object' ? projectOrId?.id : projectOrId;
+    return this._startingProjects.has(id?.toString());
+  }
+
   async stop(project) {
     const idStr = project.id.toString();
     this._newOpToken(idStr); // cancel any in-flight start

@@ -131,6 +131,14 @@ describe('DockerManager start double-start', () => {
 
     dm._startingProjects.delete('1');
   });
+
+  it('reports when a project start is in progress', () => {
+    const project = { id: 1, path: tmpDir, name: 'test', subdomain: 'test' };
+    dm._startingProjects.add('1');
+    assert.equal(dm.isStarting(project), true);
+    dm._startingProjects.delete('1');
+    assert.equal(dm.isStarting(project), false);
+  });
 });
 
 // ---- DI spawner verification ----

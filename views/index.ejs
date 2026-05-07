@@ -255,6 +255,12 @@
           var res = await fetch('/projects/' + id + '/start', { method: 'POST' });
           if (!res.ok) {
             var data = await res.json();
+            if (res.status === 409 && (data.alreadyStarting || /already starting/i.test(data.error || ''))) {
+              btn.disabled = true;
+              btn.textContent = 'Starting...';
+              _listSubscribeStartup(id, btn);
+              return;
+            }
             alert('Error: ' + data.error);
             btn.disabled = false;
             btn.textContent = 'Start';

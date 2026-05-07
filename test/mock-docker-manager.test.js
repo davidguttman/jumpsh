@@ -40,6 +40,13 @@ describe('MockDockerManager start', () => {
     assert.ok(results.some(r => r.alreadyStarting === true));
   });
 
+  it('reports when a project start is in progress', async () => {
+    const start = mdm.start(project);
+    assert.equal(mdm.isStarting(project), true);
+    await start;
+    assert.equal(mdm.isStarting(project), false);
+  });
+
   it('emits startup steps to listeners', async () => {
     const events = [];
     mdm.addStartupListener(1, (data) => events.push(data));

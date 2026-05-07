@@ -20,6 +20,7 @@ import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
+import { enrichProjectStatus } from './lib/projectStatus.js';
 
 dotenv.config({ quiet: true });
 
@@ -169,10 +170,7 @@ app.get('/', async (req, res) => {
     // Get status for each project
     const projectsWithStatus = await Promise.all(
       (projects || []).map(async (project) => {
-        const status = await docker.getStatus(project);
-        const port = status.running ? await docker.getPort(project) : null;
-        const health = docker.getHealthWithProbe(project, status);
-        return { ...project, status: status.running ? 'running' : 'stopped', port, health };
+        return enrichProjectStatus(docker, project);
       })
     );
 
@@ -253,21 +251,22 @@ app.post('/projects', (req, res) => {
         return res.status(mapped.status).send(mapped.error);
       }
 
-      db.getProject(id, async (err, project) => {
+      db.getProject(id, (err, project) => {
+        if (err) {
+          console.error('Project lookup after creation failed:', err.message);
+        }
         if (!err && project) {
           // Start watching for worktrees
           worktreeScanner.watchProject(project);
-          // Auto-start the project
-          try {
-            await docker.start(project);
-          } catch (startErr) {
+          // Auto-start the project, but redirect as soon as the in-flight state is visible.
+          docker.start(project).catch((startErr) => {
             console.error("Auto-start failed for project " + id + ":", startErr.message);
-          }
+          });
         }
-      });
 
-      if (wantsJson) return res.json({ ok: true, id });
-      res.redirect('/');
+        if (wantsJson) return res.json({ ok: true, id });
+        res.redirect('/');
+      });
     });
   });
 });
@@ -280,10 +279,7 @@ app.get('/projects/:id/detail-partial', (req, res) => {
     if (err) return res.status(500).send('Database error');
     if (!project) return res.status(404).send('Project not found');
 
-    const status = await docker.getStatus(project);
-    const port = status.running ? await docker.getPort(project) : null;
-    const health = docker.getHealthWithProbe(project, status);
-    const enriched = { ...project, status: status.running ? 'running' : 'stopped', port, health };
+    const enriched = await enrichProjectStatus(docker, project);
 
     const logs = await docker.getLogs(enriched, 200);
     const detection = detectProjectType(enriched.path);
@@ -292,10 +288,7 @@ app.get('/projects/:id/detail-partial', (req, res) => {
       db.getWorktreesForProject(id, async (wtErr, wts) => {
         if (wtErr || !wts) return resolve([]);
         const enrichedWts = await Promise.all(wts.map(async (wt) => {
-          const wtStatus = await docker.getStatus(wt);
-          const wtPort = wtStatus.running ? await docker.getPort(wt) : null;
-          const wtHealth = docker.getHealthWithProbe(wt, wtStatus);
-          return { ...wt, status: wtStatus.running ? 'running' : 'stopped', port: wtPort, health: wtHealth };
+          return enrichProjectStatus(docker, wt);
         }));
         resolve(enrichedWts);
       });
@@ -333,12 +326,12 @@ app.post('/projects/:id/start', (req, res) => {
 
     const result = await docker.start(project);
     if (result.alreadyStarting) {
-      return res.status(409).json({ error: 'Project is already starting' });
+      const enriched = await enrichProjectStatus(docker, project);
+      return res.status(202).json({ success: true, alreadyStarting: true, status: enriched.status, health: enriched.health });
     }
     if (result.success) {
-      const status = await docker.getStatus(project);
-      const health = docker.getHealthWithProbe(project, status);
-      res.json({ success: true, status: result.status, health });
+      const enriched = await enrichProjectStatus(docker, project);
+      res.json({ success: true, status: enriched.status, health: enriched.health });
 
       // Auto-start worktrees (fire-and-forget)
       db.getWorktreesForProject(id, (err, worktrees) => {
@@ -407,9 +400,8 @@ app.post('/projects/:id/restart', (req, res) => {
       docker.start(wt);
     }
 
-    const status = await docker.getStatus(project);
-    const health = docker.getHealthWithProbe(project, status);
-    res.json({ success: true, status: result.status, health });
+    const enriched = await enrichProjectStatus(docker, project);
+    res.json({ success: true, status: enriched.status, health: enriched.health });
   });
 });
 
@@ -589,10 +581,7 @@ app.get('/api/projects/:id', async (req, res) => {
     if (err || !project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    const status = await docker.getStatus(project);
-    const port = status.running ? await docker.getPort(project) : null;
-    const health = docker.getHealthWithProbe(project, status);
-    res.json({ ...project, status: status.running ? 'running' : 'stopped', port, health });
+    res.json(await enrichProjectStatus(docker, project));
   });
 });
 
@@ -606,10 +595,7 @@ app.get('/api/projects', async (req, res) => {
 
     const projectsWithStatus = await Promise.all(
       (projects || []).map(async (project) => {
-        const status = await docker.getStatus(project);
-        const port = status.running ? await docker.getPort(project) : null;
-        const health = docker.getHealthWithProbe(project, status);
-        return { ...project, status: status.running ? 'running' : 'stopped', port, health };
+        return enrichProjectStatus(docker, project);
       })
     );
 
