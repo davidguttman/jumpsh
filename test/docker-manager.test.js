@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'path';
+import { EventEmitter } from 'node:events';
 import DockerManager from '../services/DockerManager.js';
 import { createMockDb } from './helpers/mock-db.js';
 import { createMockSpawner } from './helpers/mock-spawner.js';
@@ -138,6 +139,64 @@ describe('DockerManager start double-start', () => {
     assert.equal(dm.isStarting(project), true);
     dm._startingProjects.delete('1');
     assert.equal(dm.isStarting(project), false);
+  });
+});
+
+
+// ---- streamLogs ----
+
+describe('DockerManager streamLogs', () => {
+  it('starts a bounded follow stream without replaying historical logs', () => {
+    const spawner = createMockSpawner();
+    const composeCalls = [];
+    const mgr = new DockerManager(mockDb, {
+      spawner,
+      composeSpawnBuilder: (args, composePath) => {
+        composeCalls.push({ args, composePath });
+        return {
+          command: 'docker',
+          args: ['compose', ...(composePath ? ['-f', composePath] : []), ...args]
+        };
+      }
+    });
+    writeFile(tmpDir, 'docker-compose.yml', 'services:\n');
+    const project = { id: 1, path: tmpDir, name: 'test', subdomain: 'test' };
+    const res = new EventEmitter();
+    res.writeHead = (code, headers) => {
+      res.statusCode = code;
+      res.headers = headers;
+    };
+    const writes = [];
+    res.write = (chunk) => {
+      writes.push(chunk);
+    };
+    res.flushHeaders = () => {
+      res.flushedHeaders = true;
+    };
+    res.end = () => {
+      res.ended = true;
+    };
+
+    const child = mgr.streamLogs(project, res);
+
+    assert.equal(res.flushedHeaders, true);
+    assert.equal(writes[0], ': connected\n\n');
+    assert.ok(!writes[0].startsWith('data:'));
+    assert.equal(child.pid, 12345);
+    assert.equal(composeCalls.length, 1);
+    assert.deepEqual(composeCalls[0], {
+      args: ['logs', '--tail=0', '-f', '--no-color'],
+      composePath: path.join(tmpDir, 'docker-compose.yml')
+    });
+    assert.deepEqual(spawner.calls[0].args, [
+      'compose',
+      '-f',
+      path.join(tmpDir, 'docker-compose.yml'),
+      'logs',
+      '--tail=0',
+      '-f',
+      '--no-color'
+    ]);
   });
 });
 

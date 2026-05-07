@@ -90,9 +90,10 @@ function readBuildLog(slug) {
 }
 
 class DockerManager {
-  constructor(db, { spawner = spawn } = {}) {
+  constructor(db, { spawner = spawn, composeSpawnBuilder = buildComposeSpawn } = {}) {
     this.db = db;
     this.spawner = spawner;
+    this.composeSpawnBuilder = composeSpawnBuilder;
     this.healthStates = new Map(); // projectId -> 'unknown' | 'starting' | 'healthy' | 'unhealthy'
     this.startupListeners = new Map(); // projectId -> Set<callback>
     this.startupSteps = new Map(); // projectId -> current step data
@@ -588,8 +589,12 @@ class DockerManager {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive'
     });
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+    res.write(': connected\n\n');
 
-    const { command, args } = buildComposeSpawn(['logs', '-f', '--no-color'], composePath);
+    const { command, args } = this.composeSpawnBuilder(['logs', '--tail=0', '-f', '--no-color'], composePath);
     const child = this.spawner(command, args, { cwd: projectPath });
 
     child.on("error", (err) => {

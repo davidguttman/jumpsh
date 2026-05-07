@@ -117,10 +117,25 @@ fi
 assert "subdomain proxy returns e2e-fixture-ok" \
   "$([ "$PROXY_BODY" = "e2e-fixture-ok" ] && echo true || echo false)"
 
-# ── Step 7: Logs endpoint ──
-echo "Step 7: Test logs SSE endpoint"
-LOG_BODY=$(curl -s --max-time 5 "$LH/projects/$PROJECT_ID/logs/stream" 2>/dev/null) || true
-assert "logs endpoint returns data" "$([ -n "$LOG_BODY" ] && echo true || echo false)"
+# ── Step 7: Logs endpoints ──
+echo "Step 7: Test logs history and live stream endpoints"
+api_call GET "$LH/projects/$PROJECT_ID/logs?lines=200"
+HISTORY_LOG_LINE_COUNT=$(echo "$RESP_BODY" | jq -er 'if (.lines | type == "array") then (.lines | length) else empty end' 2>/dev/null) || HISTORY_LOG_LINE_COUNT=""
+HISTORY_HAS_FIXTURE_LOG=$(echo "$RESP_BODY" | jq -r '(.lines | type == "array") and any(.lines[]?; contains("e2e fixture listening on :3000"))' 2>/dev/null) || HISTORY_HAS_FIXTURE_LOG="false"
+HISTORY_HAS_ERROR_LOG=$(echo "$RESP_BODY" | jq -r 'if (.lines | type == "array") then any(.lines[]?; contains("Error getting logs:")) else true end' 2>/dev/null) || HISTORY_HAS_ERROR_LOG="true"
+if [ "$HISTORY_HAS_FIXTURE_LOG" != "true" ] || [ "$HISTORY_HAS_ERROR_LOG" = "true" ]; then
+  echo "  >> logs history line count: ${HISTORY_LOG_LINE_COUNT:-0}"
+  echo "  >> logs history body: $RESP_BODY"
+fi
+assert "logs history includes fixture startup log and no error lines" \
+  "$([ "$RESP_STATUS" = "200" ] && [ -n "$HISTORY_LOG_LINE_COUNT" ] && [ "$HISTORY_LOG_LINE_COUNT" -gt 0 ] && [ "$HISTORY_HAS_FIXTURE_LOG" = "true" ] && [ "$HISTORY_HAS_ERROR_LOG" != "true" ] 2>/dev/null && echo true || echo false)"
+
+SSE_HEADERS=$(mktemp)
+SSE_STATUS=$(curl -s -o /dev/null -D "$SSE_HEADERS" -w '%{http_code}' --max-time 1 "$LH/projects/$PROJECT_ID/logs/stream" 2>/dev/null) || true
+SSE_CONTENT_TYPE=$(tr -d '\r' < "$SSE_HEADERS" | awk -F': *' 'tolower($1)=="content-type" {print tolower($2); exit}')
+rm -f "$SSE_HEADERS"
+assert "logs stream is reachable as SSE live stream" \
+  "$([ "$SSE_STATUS" = "200" ] && [[ "$SSE_CONTENT_TYPE" == text/event-stream* ]] && echo true || echo false)"
 
 # ── Step 8: Stop project ──
 echo "Step 8: Stop project"
