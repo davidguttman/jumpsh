@@ -245,6 +245,20 @@ class DockerManager {
           const candidate = path.join(parent.path, '.env');
           if (fs.existsSync(candidate)) parentEnvPath = candidate;
         }
+        if (project.is_worktree && parentEnvPath && project.path) {
+          const linkPath = path.join(project.path, '.env');
+          try {
+            const stat = fs.lstatSync(linkPath);
+            if (stat.isSymbolicLink() && fs.readlinkSync(linkPath) !== parentEnvPath) {
+              fs.unlinkSync(linkPath);
+              fs.symlinkSync(parentEnvPath, linkPath);
+            }
+          } catch (e) {
+            if (e.code === 'ENOENT') {
+              try { fs.symlinkSync(parentEnvPath, linkPath); } catch { /* best effort */ }
+            }
+          }
+        }
       }
     }
 
