@@ -1,11 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import MockDockerManager from '../services/MockDockerManager.js';
 import SubdomainProxy, { decodeContextHostCandidates } from '../services/SubdomainProxy.js';
+import { DNS_LABEL_MAX_LENGTH, encodeContextHost, getContextHostMetadata } from '../lib/context-host.js';
 import Database from '../database.js';
 import { createMockDb } from './helpers/mock-db.js';
 
@@ -291,9 +293,35 @@ describe('Non-dev-mode behavior', () => {
 
 // ---- Context-host encode/decode ----
 
-function encodeContextHost(projectSubdomain, contextSubdomain) {
-  return `${projectSubdomain}--${contextSubdomain}`;
-}
+describe('encodeContextHost', () => {
+  it('keeps normal context labels unchanged when DNS-safe', () => {
+    const metadata = getContextHostMetadata('fixture-static-html', 'jump-sh--dev-mode');
+
+    assert.equal(metadata.label, 'fixture-static-html--jump-sh--dev-mode');
+    assert.equal(metadata.isShortened, false);
+    assert.equal(
+      encodeContextHost('fixture-static-html', 'jump-sh--dev-mode'),
+      'fixture-static-html--jump-sh--dev-mode'
+    );
+  });
+
+  it('shortens long context labels to deterministic DNS-safe aliases', () => {
+    const projectSubdomain = 'power-slides';
+    const contextSubdomain = 'kamajiremote-first-starter-copy-1511450237200236627';
+    const alias = encodeContextHost(projectSubdomain, contextSubdomain);
+    const again = encodeContextHost(projectSubdomain, contextSubdomain);
+
+    const metadata = getContextHostMetadata(projectSubdomain, contextSubdomain);
+
+    assert.equal(again, alias, 'alias should be deterministic');
+    assert.equal(metadata.label, alias);
+    assert.equal(metadata.isShortened, true);
+    assert.ok(alias.length <= DNS_LABEL_MAX_LENGTH, `alias should fit DNS label limit: ${alias.length}`);
+    assert.notEqual(alias, `${projectSubdomain}--${contextSubdomain}`);
+    assert.ok(alias.startsWith('power-slides--kamajiremote'), 'alias should keep readable prefixes');
+    assert.match(alias, /--[a-f0-9]{16}$/u, 'alias should include stable hash suffix');
+  });
+});
 
 describe('decodeContextHostCandidates', () => {
   it('decodes simple encoded host', () => {
@@ -443,6 +471,156 @@ describe('SubdomainProxy context-host routing', () => {
 
     setTimeout(() => {
       // Context project found but not running → 503
+      assert.equal(res.statusCode, 503);
+      done();
+    }, 50);
+  });
+
+  it('resolves shortened context alias to context project in non-dev middleware', (t, done) => {
+    const targetProject = { id: 1, name: 'power-slides', subdomain: 'power-slides' };
+    const contextProject = {
+      id: 2,
+      name: 'kamajiremote-first-starter-copy-1511450237200236627',
+      subdomain: 'kamajiremote-first-starter-copy-1511450237200236627',
+    };
+    const alias = encodeContextHost(targetProject.subdomain, contextProject.subdomain);
+    let routedProject = null;
+    const db = {
+      getProjectBySubdomain: (sub, cb) => {
+        if (sub === contextProject.subdomain) return cb(null, contextProject);
+        cb(null, null);
+      },
+      getAllProjectsIncludingWorktrees: (cb) => cb(null, [targetProject, contextProject]),
+    };
+    const fakeDocker = {
+      getPort: async (project) => {
+        routedProject = project;
+        return null;
+      },
+    };
+    const proxy = new SubdomainProxy(db, fakeDocker, config);
+    const mw = proxy.middleware();
+    const res = mockRes();
+
+    assert.ok(alias.length <= DNS_LABEL_MAX_LENGTH);
+    mw(mockReq(`${alias}.jump.sh`), res, () => {});
+
+    setTimeout(() => {
+      assert.equal(routedProject?.id, contextProject.id);
+      assert.equal(res.statusCode, 503);
+      done();
+    }, 50);
+  });
+
+  it('prioritizes shortened alias before generic hash-like suffix matches in middleware', (t, done) => {
+    const targetProject = { id: 1, name: 'power-slides', subdomain: 'power-slides' };
+    const contextProject = {
+      id: 2,
+      name: 'kamajiremote-first-starter-copy-1511450237200236627',
+      subdomain: 'kamajiremote-first-starter-copy-1511450237200236627',
+    };
+    const alias = encodeContextHost(targetProject.subdomain, contextProject.subdomain);
+    const hashSubdomain = alias.slice(alias.lastIndexOf('--') + 2);
+    const hashLikeProject = { id: 3, name: hashSubdomain, subdomain: hashSubdomain };
+    const lookups = [];
+    let routedProject = null;
+    const db = {
+      getProjectBySubdomain: (sub, cb) => {
+        lookups.push(sub);
+        if (sub === contextProject.subdomain) return cb(null, contextProject);
+        if (sub === hashLikeProject.subdomain) return cb(null, hashLikeProject);
+        cb(null, null);
+      },
+      getAllProjectsIncludingWorktrees: (cb) => cb(null, [targetProject, contextProject, hashLikeProject]),
+    };
+    const fakeDocker = {
+      getPort: async (project) => {
+        routedProject = project;
+        return null;
+      },
+    };
+    const proxy = new SubdomainProxy(db, fakeDocker, config);
+    const mw = proxy.middleware();
+    const res = mockRes();
+
+    assert.equal(getContextHostMetadata(targetProject.subdomain, contextProject.subdomain).isShortened, true);
+    mw(mockReq(`${alias}.jump.sh`), res, () => {});
+
+    setTimeout(() => {
+      assert.equal(routedProject?.id, contextProject.id);
+      assert.equal(res.statusCode, 503);
+      assert.ok(!lookups.includes(hashSubdomain), 'generic hash-suffix split should not run first');
+      done();
+    }, 50);
+  });
+
+  it('resolves shortened context alias to context project in websocket upgrades', (t, done) => {
+    const targetProject = { id: 1, name: 'power-slides', subdomain: 'power-slides' };
+    const contextProject = {
+      id: 2,
+      name: 'kamajiremote-first-starter-copy-1511450237200236627',
+      subdomain: 'kamajiremote-first-starter-copy-1511450237200236627',
+    };
+    const alias = encodeContextHost(targetProject.subdomain, contextProject.subdomain);
+    const hashSubdomain = alias.slice(alias.lastIndexOf('--') + 2);
+    const hashLikeProject = { id: 3, name: hashSubdomain, subdomain: hashSubdomain };
+    const db = {
+      getProjectBySubdomain: (sub, cb) => {
+        if (sub === contextProject.subdomain) return cb(null, contextProject);
+        if (sub === hashLikeProject.subdomain) return cb(null, hashLikeProject);
+        cb(null, null);
+      },
+      getAllProjectsIncludingWorktrees: (cb) => cb(null, [targetProject, contextProject, hashLikeProject]),
+    };
+    const fakeDocker = { getPort: async () => 3210 };
+    const proxy = new SubdomainProxy(db, fakeDocker, config);
+    const server = new EventEmitter();
+    const socket = { destroy: () => assert.fail('socket should not be destroyed') };
+    let upgradedProject = null;
+
+    proxy.getOrCreateProxy = (port, project) => ({
+      upgrade: () => {
+        assert.equal(port, 3210);
+        upgradedProject = project;
+      },
+    });
+    proxy.attachUpgrade(server);
+    server.emit('upgrade', { headers: { host: `${alias}.jump.sh` } }, socket, Buffer.alloc(0));
+
+    setTimeout(() => {
+      assert.equal(upgradedProject?.id, contextProject.id);
+      done();
+    }, 50);
+  });
+
+  it('keeps generic split precedence for normal non-shortened context labels', (t, done) => {
+    const firstSuffixContext = { id: 2, name: 'ctx--extra', subdomain: 'ctx--extra' };
+    const laterSuffixContext = { id: 3, name: 'extra', subdomain: 'extra' };
+    const misleadingNormalPairTarget = { id: 4, name: 'my-app--ctx', subdomain: 'my-app--ctx' };
+    let routedProject = null;
+    const db = {
+      getProjectBySubdomain: (sub, cb) => {
+        if (sub === firstSuffixContext.subdomain) return cb(null, firstSuffixContext);
+        if (sub === laterSuffixContext.subdomain) return cb(null, laterSuffixContext);
+        cb(null, null);
+      },
+      getAllProjectsIncludingWorktrees: (cb) => cb(null, [misleadingNormalPairTarget, laterSuffixContext, firstSuffixContext]),
+    };
+    const fakeDocker = {
+      getPort: async (project) => {
+        routedProject = project;
+        return null;
+      },
+    };
+    const proxy = new SubdomainProxy(db, fakeDocker, config);
+    const mw = proxy.middleware();
+    const res = mockRes();
+
+    assert.equal(getContextHostMetadata('my-app--ctx', 'extra').isShortened, false);
+    mw(mockReq('my-app--ctx--extra.jump.sh'), res, () => {});
+
+    setTimeout(() => {
+      assert.equal(routedProject?.id, firstSuffixContext.id);
       assert.equal(res.statusCode, 503);
       done();
     }, 50);

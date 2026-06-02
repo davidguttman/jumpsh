@@ -22,6 +22,7 @@ import { certsExist, downloadCerts } from './lib/commands/certs.js';
 import { localCertStatus } from './lib/cert-status.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
+import { encodeContextHost } from './lib/context-host.js';
 import {
   autoStartDesiredProjects,
   restartProjectWithWorktrees,
@@ -156,7 +157,7 @@ app.use((req, res, next) => {
   const rc = req.requestConfig;
   rc.projectUrl = function(projectSubdomain) {
     if (rc.contextSubdomain) {
-      return formatUrl(projectSubdomain + '--' + rc.contextSubdomain + '.' + rc.domain);
+      return formatUrl(encodeContextHost(projectSubdomain, rc.contextSubdomain) + '.' + rc.domain);
     }
     return formatUrl(projectSubdomain + '.' + rc.domain);
   };

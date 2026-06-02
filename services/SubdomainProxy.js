@@ -1,5 +1,8 @@
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { detectProjectType } from './ProjectDetector.js';
+import { getContextHostMetadata } from '../lib/context-host.js';
+
+const SHORTENED_CONTEXT_ALIAS_RE = /--[a-f0-9]{16}$/u;
 
 /**
  * Decode an encoded context-host label.
@@ -236,11 +239,15 @@ docker compose -f .jump.sh/docker-compose.yml exec app ss -tlnp</pre>
   }
 
   /**
-   * Try to resolve an encoded subdomain by splitting on '--'.
-   * In dev mode (isMock): tries prefix as project subdomain (inner routing).
-   * Always: tries suffix as context subdomain (outer proxy routing).
+   * Try to resolve an encoded subdomain. Shortened aliases must be checked
+   * before generic '--' splits because the hash suffix can itself be a valid
+   * project subdomain. Normal, non-shortened labels keep the historical split
+   * precedence below.
    */
   async _resolveEncodedSubdomain(subdomain) {
+    const shortenedAlias = await this._resolveShortenedContextAlias(subdomain);
+    if (shortenedAlias) return shortenedAlias;
+
     const candidates = decodeContextHostCandidates(subdomain);
     for (const { projectSubdomain, contextSubdomain } of candidates) {
       // Dev mode: try prefix as a local project
@@ -257,6 +264,41 @@ docker compose -f .jump.sh/docker-compose.yml exec app ss -tlnp</pre>
       });
       if (ctxProject) return { project: ctxProject, isContext: true };
     }
+
+    return null;
+  }
+
+  async _getAllProjectsForAliasResolution() {
+    const method = typeof this.db.getAllProjectsIncludingWorktrees === 'function'
+      ? 'getAllProjectsIncludingWorktrees'
+      : 'getAllProjects';
+
+    if (typeof this.db[method] !== 'function') return [];
+
+    return new Promise(resolve => {
+      this.db[method]((err, projects) => resolve(err ? [] : (projects || [])));
+    });
+  }
+
+  async _resolveShortenedContextAlias(subdomain) {
+    if (!SHORTENED_CONTEXT_ALIAS_RE.test(subdomain)) return null;
+
+    const projects = await this._getAllProjectsForAliasResolution();
+    const withSubdomains = projects.filter(project => project?.subdomain);
+
+    for (const targetProject of withSubdomains) {
+      for (const contextProject of withSubdomains) {
+        const alias = getContextHostMetadata(targetProject.subdomain, contextProject.subdomain);
+        if (!alias.isShortened || alias.label !== subdomain) continue;
+
+        if (this.docker.isMock) {
+          return { project: targetProject, isContext: false };
+        }
+
+        return { project: contextProject, isContext: true };
+      }
+    }
+
     return null;
   }
 
