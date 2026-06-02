@@ -52,7 +52,9 @@ export default async function register (req, res, next) {
     await createDnsRecord(username, ip || '127.0.0.1')
 
     // Fire-and-forget cert provisioning
-    provisionUserCert(username).catch(() => {})
+    provisionUserCert(username).catch((err) => {
+      console.error(`Cert provisioning failed for ${username}:`, err?.message || err)
+    })
 
     res.json({ ok: true, subdomain: `*.${username}.jump.sh` })
   } catch (err) {
