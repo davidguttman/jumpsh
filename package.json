@@ -1,6 +1,6 @@
 {
   "name": "jump.sh",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "type": "module",
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
   "main": "server.js",
