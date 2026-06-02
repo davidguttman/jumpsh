@@ -116,19 +116,34 @@ The download endpoint is configurable via `JUMPSH_ORIGIN` (default: `https://jum
 
 The hosted jump.sh API stores per-user wildcard certificates in DNS TXT records. The API server does **not** run renewal checks inside the web process; production deployments must schedule the renewal job explicitly.
 
-Run the renewal job with either command:
+Preferred production setup is a Google Cloud Scheduler HTTP job that calls the API endpoint:
+
+```http
+POST https://<api-host>/api/jobs/renew-certs
+Authorization: Bearer <JUMPSH_RENEW_CERTS_SECRET>
+```
+
+Configure the API with a strong shared secret:
+
+```env
+JUMPSH_RENEW_CERTS_SECRET=generate-a-long-random-value
+```
+
+Then configure Cloud Scheduler with the same value in the `Authorization` header. This endpoint intentionally uses the shared secret only; no OIDC setup is required. If the API secret is missing, the endpoint returns `503` and will not run publicly. A bad or missing request secret returns `401`.
+
+Production checklist:
+
+- Schedule the HTTP job at least daily. Twice daily is preferred so certbot/GCP/transient failures have time to recover before the 30-day renewal window closes.
+- Run the API with the usual renewal credentials (`JUMP_DOMAIN`, `GCP_DNS_ZONE`, Google DNS credentials, and certbot DNS plugin access).
+- Alert on non-2xx scheduler responses. The endpoint returns `500` when the renewal summary has `failed > 0`, and `409` when a previous renewal is still running.
+- Confirm deployment platform scheduler config before shipping API changes; without this job, existing user certificates can expire even though registration continues to work.
+
+Manual fallback commands are still available:
 
 ```bash
 npm run api:cert:renew      # from the repo root
 npm run cert:renew          # from ./api
 ```
-
-Production checklist:
-
-- Schedule the command at least daily. Twice daily is preferred so certbot/GCP/transient failures have time to recover before the 30-day renewal window closes.
-- Run it with the same environment and credentials as the API (`JUMP_DOMAIN`, `GCP_DNS_ZONE`, Google DNS credentials, and certbot DNS plugin access).
-- Alert on a non-zero exit code and on renewal summaries where `failed` is greater than zero.
-- Confirm deployment platform cron/scheduler config before shipping API changes; without this job, existing user certificates can expire even though registration continues to work.
 
 **Linux only:** To bind port 443, Node.js needs low-port capability:
 ```bash
