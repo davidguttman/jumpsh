@@ -42,7 +42,8 @@ jump.sh                    Run daemon in foreground
 jump.sh add [path]         Register a project (default: current directory)
 jump.sh remove <name>      Unregister a project
 jump.sh install            Install daemon service + download certs
-jump.sh install --uninstall  Remove daemon service
+jump.sh uninstall          Remove daemon service (keeps ~/.jump.sh state)
+jump.sh upgrade            Upgrade jump.sh itself (keeps ~/.jump.sh state)
 jump.sh certs              Download TLS certificates
 jump.sh ls                 List projects with status
 jump.sh start [name]       Start project containers
@@ -92,6 +93,22 @@ jump.sh certs
 
 This fetches `server.pem` and `server-key.pem` into `~/.jump.sh/certs/`.
 `jump.sh install` also downloads certs automatically when `JUMPSH_HTTPS=true`.
+
+### Upgrading jump.sh
+
+Use the first-class upgrade command:
+
+```bash
+jump.sh upgrade
+```
+
+`jump.sh upgrade` preserves `~/.jump.sh`, projects, certificates, and registration. It removes only the current daemon service/wrapper, then reinstalls the daemon against the right package source:
+
+- npx/transient installs trampoline to `npx --yes jump.sh@latest install`
+- global npm installs run `npm install -g jump.sh@latest`, then `jump.sh install`
+- local checkouts reinstall the daemon from the checkout without mutating global npm
+
+Use `jump.sh upgrade --dry-run` to preview the daemon-only removal and reinstall plan.
 
 The download endpoint is configurable via `JUMPSH_ORIGIN` (default: `https://jump.sh`).
 
