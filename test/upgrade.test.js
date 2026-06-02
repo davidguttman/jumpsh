@@ -44,7 +44,12 @@ describe('CLI upgrade registration/help', () => {
 });
 
 describe('upgrade planning and safety', async () => {
-  const { createUpgradePlan, removeDaemonOnly } = await import('../lib/commands/upgrade.js');
+  const {
+    createUpgradePlan,
+    executeUpgradeCommand,
+    removeDaemonOnly,
+    resolveSafeUpgradeCwd,
+  } = await import('../lib/commands/upgrade.js');
 
   it('plans npx upgrades through the latest installer trampoline', () => {
     const plan = createUpgradePlan({ installMode: 'npx', binPath: '/tmp/current/bin/jumpsh.js' });
@@ -70,6 +75,51 @@ describe('upgrade planning and safety', async () => {
     ]);
   });
 
+  it('executes all upgrade reinstall modes from a safe cwd when the caller cwd was deleted', () => {
+    const originalCwd = process.cwd();
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-upgrade-safe-home-'));
+    const tmpParent = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-upgrade-deleted-cwd-'));
+    const deletedCwd = path.join(tmpParent, 'deleted');
+    fs.mkdirSync(deletedCwd);
+
+    const calls = [];
+    try {
+      process.chdir(deletedCwd);
+      fs.rmSync(deletedCwd, { recursive: true, force: true });
+
+      const safeCwd = resolveSafeUpgradeCwd({ homeDir: tmpHome, packageRoot: ROOT });
+      const plans = [
+        createUpgradePlan({ installMode: 'npx' }),
+        createUpgradePlan({ installMode: 'global' }),
+        createUpgradePlan({ installMode: 'local', binPath: path.join(ROOT, 'bin', 'jumpsh.js') }),
+      ];
+
+      for (const plan of plans) {
+        for (const step of plan.commands) {
+          executeUpgradeCommand(step, {
+            cwd: safeCwd,
+            execFileSync: (command, args, options) => calls.push({ command, args, options }),
+          });
+        }
+      }
+
+      assert.equal(safeCwd, tmpHome);
+      assert.equal(fs.existsSync(safeCwd), true);
+      assert.deepEqual(
+        calls.map(({ command, args }) => ({ command, args })),
+        plans.flatMap((plan) => plan.commands),
+      );
+      for (const call of calls) {
+        assert.equal(call.options.cwd, tmpHome);
+        assert.equal(call.options.stdio, 'inherit');
+      }
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+      fs.rmSync(tmpParent, { recursive: true, force: true });
+    }
+  });
+
   it('removes daemon files but preserves ~/.jump.sh state files', () => {
     const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-upgrade-home-'));
     try {
@@ -87,12 +137,13 @@ describe('upgrade planning and safety', async () => {
       const removed = removeDaemonOnly({
         platform: 'linux',
         homeDir: tmpHome,
-        execSync: (cmd) => commands.push(cmd),
+        execSync: (cmd, options) => commands.push({ cmd, options }),
       });
 
       assert.ok(removed.some((entry) => entry.includes('jumpsh.service')));
       assert.ok(removed.some((entry) => entry.includes('jumpsh-daemon.sh')));
-      assert.ok(commands.some((cmd) => cmd.includes('systemctl --user stop jumpsh')));
+      assert.ok(commands.some(({ cmd }) => cmd.includes('systemctl --user stop jumpsh')));
+      assert.ok(commands.every(({ options }) => options.cwd === tmpHome));
       assert.equal(fs.existsSync(path.join(stateDir, 'jumpsh-daemon.sh')), false);
       assert.equal(fs.existsSync(path.join(systemdDir, 'jumpsh.service')), false);
       assert.equal(fs.existsSync(stateDir), true);
