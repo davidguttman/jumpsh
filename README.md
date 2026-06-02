@@ -112,6 +112,24 @@ Use `jump.sh upgrade --dry-run` to preview the daemon-only removal and reinstall
 
 The download endpoint is configurable via `JUMPSH_ORIGIN` (default: `https://jump.sh`).
 
+### API Certificate Renewal Scheduling
+
+The hosted jump.sh API stores per-user wildcard certificates in DNS TXT records. The API server does **not** run renewal checks inside the web process; production deployments must schedule the renewal job explicitly.
+
+Run the renewal job with either command:
+
+```bash
+npm run api:cert:renew      # from the repo root
+npm run cert:renew          # from ./api
+```
+
+Production checklist:
+
+- Schedule the command at least daily. Twice daily is preferred so certbot/GCP/transient failures have time to recover before the 30-day renewal window closes.
+- Run it with the same environment and credentials as the API (`JUMP_DOMAIN`, `GCP_DNS_ZONE`, Google DNS credentials, and certbot DNS plugin access).
+- Alert on a non-zero exit code and on renewal summaries where `failed` is greater than zero.
+- Confirm deployment platform cron/scheduler config before shipping API changes; without this job, existing user certificates can expire even though registration continues to work.
+
 **Linux only:** To bind port 443, Node.js needs low-port capability:
 ```bash
 scripts/enable-low-port-bind-linux.sh

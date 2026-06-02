@@ -19,6 +19,7 @@ import { detectProjectType } from './services/ProjectDetector.js';
 import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
+import { localCertStatus } from './lib/cert-status.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
 import {
@@ -719,7 +720,13 @@ function loadCertPair(dir, label) {
     const keyFile = path.join(dir, key);
     const certFile = path.join(dir, cert);
     if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
-      console.log(`[SNI] Loaded ${label} certs from ${dir} (${cert})`);
+      const status = localCertStatus({ certPath: certFile, keyPath: keyFile });
+      if (status.status !== 'valid') {
+        const expires = status.expires_at ? `, expires ${status.expires_at}` : '';
+        console.warn(`[SNI] ${label} certs in ${dir} are ${status.status}${expires}, skipping`);
+        continue;
+      }
+      console.log(`[SNI] Loaded ${label} certs from ${dir} (${cert}, expires ${status.expires_at})`);
       return { key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile) };
     }
   }

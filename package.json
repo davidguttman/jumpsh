@@ -18,7 +18,8 @@
     "api:start": "node api/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepare": "scripts/install-hooks.sh"
+    "prepare": "scripts/install-hooks.sh",
+    "api:cert:renew": "cd api && npm run cert:renew"
   },
   "keywords": [
     "dev",

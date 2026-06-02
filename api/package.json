@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "test": "node --test test/*.test.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "cert:renew": "node jobs/renew.js"
   },
   "dependencies": {
     "@google-cloud/dns": "^5.3.1",
