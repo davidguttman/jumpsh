@@ -15,6 +15,15 @@ class WorktreeScanner {
     this.installTimers = new Map(); // targetId -> Timeout
   }
 
+  _dbCall(method, ...args) {
+    return new Promise((resolve, reject) => {
+      this.db[method](...args, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
+    });
+  }
+
   _getOrCreateWatcherMap(projectId) {
     let map = this.watchers.get(projectId);
     if (!map) {
@@ -80,7 +89,7 @@ class WorktreeScanner {
       console.log(`Watching worktrees for ${project.name}: ${worktreesDir}`);
 
       // Initial scan also wires up per-worktree package.json watchers
-      this.scanWorktrees(project);
+      const scanPromise = this.scanWorktrees(project);
 
       try {
         const watcher = fs.watch(worktreesDir, { persistent: false }, (eventType, filename) => {
@@ -91,7 +100,11 @@ class WorktreeScanner {
       } catch (error) {
         console.error(`Error watching ${worktreesDir}:`, error.message);
       }
+
+      return scanPromise;
     }
+
+    return Promise.resolve([]);
   }
 
   // Stop watching a project (closes ALL watchers for this project)
@@ -140,6 +153,12 @@ class WorktreeScanner {
 
     const entries = fs.readdirSync(worktreesDir, { withFileTypes: true });
     const worktrees = [];
+    let existingWorktrees;
+    try {
+      existingWorktrees = await this._dbCall('getWorktreesForProject', project.id) || [];
+    } catch {
+      existingWorktrees = null;
+    }
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
@@ -164,62 +183,82 @@ class WorktreeScanner {
       const branchSlug = slugify(branchName, { lower: true, strict: true });
       const subdomain = `${parentSubdomain}--${branchSlug}`;
 
+      const worktreeName = `${project.name} (${branchName})`;
       const worktree = {
-        name: `${project.name} (${branchName})`,
+        name: worktreeName,
         path: worktreePath,
         subdomain,
         parent_project_id: project.id,
         branch_name: branchName
       };
+      const existingWorktree = existingWorktrees?.find(wt => wt.path === worktreePath || wt.name === worktreeName);
+      if (project.desired_running && existingWorktrees && !existingWorktree) worktree.desired_running = 1;
 
       worktrees.push(worktree);
 
       // Upsert to database
-      this.db.upsertWorktree(worktree, (err) => {
-        if (err) console.error(`Error upserting worktree:`, err);
-      });
+      try {
+        await this._dbCall('upsertWorktree', worktree);
+      } catch (err) {
+        console.error(`Error upserting worktree:`, err);
+      }
     }
 
     // Remove worktrees that no longer exist, and auto-start if parent is running
-    this.db.getWorktreesForProject(project.id, async (err, dbWorktrees) => {
-      if (err || !dbWorktrees) return;
+    let dbWorktrees;
+    try {
+      dbWorktrees = await this._dbCall('getWorktreesForProject', project.id) || [];
+    } catch {
+      return worktrees;
+    }
 
-      const currentPaths = new Set(worktrees.map(w => w.path));
-      for (const dbWt of dbWorktrees) {
-        if (!currentPaths.has(dbWt.path)) {
-          this.db.deleteWorktree(dbWt.path, () => {});
+    const currentPaths = new Set(worktrees.map(w => w.path));
+    for (const dbWt of dbWorktrees) {
+      if (!currentPaths.has(dbWt.path)) {
+        this.db.deleteWorktree(dbWt.path, () => {});
+      }
+    }
+
+    // Sync per-worktree package.json watchers to the current set
+    const activeWorktrees = dbWorktrees.filter(wt => currentPaths.has(wt.path));
+    this._syncWorktreePackageWatchers(project, activeWorktrees);
+
+    // Auto-start worktrees if parent project is running
+    if (this.docker) {
+      let parentStatus;
+      try {
+        parentStatus = await this.docker.getStatus(project);
+      } catch (err) {
+        console.error(`Error checking parent status for ${project.name}:`, err.message);
+        return worktrees;
+      }
+      if (parentStatus.running) {
+        for (const wt of activeWorktrees) {
+          this.docker.start(wt).then((result) => {
+            if (result?.success || result?.alreadyStarting) {
+              if (typeof this.db.setDesiredRunning === 'function') {
+                this.db.setDesiredRunning([wt.id], true, () => {});
+              } else {
+                this.db.updateProject(wt.id, { desired_running: 1 }, () => {});
+              }
+            }
+          }).catch(err => {
+            console.error(`Worktree start failed for ${wt.path}:`, err.message);
+          }); // fire-and-forget
         }
       }
-
-      // Sync per-worktree package.json watchers to the current set
-      const activeWorktrees = dbWorktrees.filter(wt => currentPaths.has(wt.path));
-      this._syncWorktreePackageWatchers(project, activeWorktrees);
-
-      // Auto-start worktrees if parent project is running
-      if (this.docker) {
-        const parentStatus = await this.docker.getStatus(project);
-        if (parentStatus.running) {
-          for (const wt of activeWorktrees) {
-            this.docker.start(wt); // fire-and-forget
-          }
-        }
-      }
-    });
+    }
 
     return worktrees;
   }
 
   // Scan all projects
   scanAllProjects() {
-    this.db.ready().then(() => {
-      this.db.getAllProjects((err, projects) => {
-        if (err || !projects) return;
-
-        for (const project of projects) {
-          this.watchProject(project);
-        }
-      });
-    });
+    return this.db.ready().then(() => this._dbCall('getAllProjects'))
+      .then(projects => Promise.all((projects || []).map(project => Promise.resolve(this.watchProject(project)).catch(err => {
+        console.error(`Error scanning worktrees for ${project.name}:`, err.message);
+        return [];
+      }))));
   }
 
   // Cleanup all watchers

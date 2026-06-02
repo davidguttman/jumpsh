@@ -31,6 +31,12 @@ These commands talk to the local jump.sh daemon (`https://dash.<domain>`):
 The daemon must be running. If not, the command exits non-zero with a clear
 `DAEMON_NOT_RUNNING` error.
 
+Successful `start`/`restart` requests persist the project (and known worktrees)
+as desired-running. Successful `stop` requests clear that flag. When the daemon
+starts after a daemon or system restart, it attempts to restore desired-running
+projects that are not already running or starting; restore failures are logged
+and do not prevent the daemon from booting.
+
 ## JSON Output
 
 Success:

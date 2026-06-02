@@ -20,6 +20,7 @@ const PROJECT_DEFAULTS = {
   override_port: null,
   override_docker_image: null,
   override_env: null,
+  desired_running: 0,
 };
 
 function applyDefaults(record) {
@@ -129,6 +130,7 @@ class Database {
       override_port: project.override_port || null,
       override_docker_image: project.override_docker_image || null,
       override_env: project.override_env || null,
+      desired_running: project.desired_running ? 1 : 0,
       created_at: now,
       updated_at: now,
     };
@@ -201,6 +203,19 @@ class Database {
     this._write().then(() => callback(null)).catch(callback);
   }
 
+  setDesiredRunning(projectIds, desired, callback) {
+    const ids = new Set((Array.isArray(projectIds) ? projectIds : [projectIds]).map(id => parseInt(id, 10)));
+    const value = desired ? 1 : 0;
+    const now = new Date().toISOString();
+    for (const project of this.db.data.projects) {
+      if (ids.has(project.id)) {
+        project.desired_running = value;
+        project.updated_at = now;
+      }
+    }
+    this._write().then(() => callback(null)).catch(callback);
+  }
+
   deleteProject(id, callback) {
     const numId = parseInt(id, 10);
     // Delete worktrees first, then the project
@@ -218,6 +233,7 @@ class Database {
       existing.path = path;
       existing.subdomain = subdomain;
       existing.branch_name = branch_name;
+      if ('desired_running' in worktree) existing.desired_running = worktree.desired_running ? 1 : 0;
       existing.updated_at = new Date().toISOString();
     } else {
       const now = new Date().toISOString();
@@ -237,6 +253,7 @@ class Database {
         override_port: null,
         override_docker_image: null,
         override_env: null,
+        desired_running: worktree.desired_running ? 1 : 0,
         created_at: now,
         updated_at: now,
       });

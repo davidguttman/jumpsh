@@ -49,6 +49,7 @@ describe('Database CRUD', () => {
     const id = await cb(done => db.createProject({ name: 'app2', path: '/tmp/app2' }, done));
     const p = await cb(done => db.getProject(id, done));
     assert.equal(p.assigned_port, null);
+    assert.equal(p.desired_running, 0);
     assert.ok(p.created_at);
     assert.ok(p.updated_at);
     assert.equal(p.is_worktree, 0);
@@ -114,6 +115,19 @@ describe('Database CRUD', () => {
     assert.ok(after.updated_at);
   });
 
+  it('sets desired-running for one or more projects', async () => {
+    const first = await cb(done => db.createProject({ name: 'first', path: '/tmp/first' }, done));
+    const second = await cb(done => db.createProject({ name: 'second', path: '/tmp/second' }, done));
+
+    await cb(done => db.setDesiredRunning([first, second], true, done));
+    assert.equal((await cb(done => db.getProject(first, done))).desired_running, 1);
+    assert.equal((await cb(done => db.getProject(second, done))).desired_running, 1);
+
+    await cb(done => db.setDesiredRunning(first, false, done));
+    assert.equal((await cb(done => db.getProject(first, done))).desired_running, 0);
+    assert.equal((await cb(done => db.getProject(second, done))).desired_running, 1);
+  });
+
   it('deletes a project and its worktrees', async () => {
     const parentId = await cb(done => db.createProject({ name: 'del', path: '/tmp/del' }, done));
     await cb(done => db.createProject({ name: 'wt', path: '/tmp/wt', is_worktree: true, parent_project_id: parentId }, done));
@@ -134,6 +148,7 @@ describe('Database worktrees', () => {
     const wts = await cb(done => db.getWorktreesForProject(parentId, done));
     assert.equal(wts.length, 1);
     assert.equal(wts[0].subdomain, 'p--feat');
+    assert.equal(wts[0].desired_running, 0);
   });
 
   it('upserts existing worktree without duplicating', async () => {
@@ -143,6 +158,17 @@ describe('Database worktrees', () => {
     const wts = await cb(done => db.getWorktreesForProject(parentId, done));
     assert.equal(wts.length, 1);
     assert.equal(wts[0].path, '/tmp/feat2');
+  });
+
+  it('preserves desired-running on existing worktree upsert when not specified', async () => {
+    const parentId = await cb(done => db.createProject({ name: 'p', path: '/tmp/p' }, done));
+    await cb(done => db.upsertWorktree({ name: 'p (feat)', path: '/tmp/feat', subdomain: 'p--feat', parent_project_id: parentId, branch_name: 'feat', desired_running: 1 }, done));
+    await cb(done => db.upsertWorktree({ name: 'p (feat)', path: '/tmp/feat2', subdomain: 'p--feat2', parent_project_id: parentId, branch_name: 'feat' }, done));
+
+    const wts = await cb(done => db.getWorktreesForProject(parentId, done));
+    assert.equal(wts.length, 1);
+    assert.equal(wts[0].path, '/tmp/feat2');
+    assert.equal(wts[0].desired_running, 1);
   });
 
   it('deletes a worktree by path', async () => {

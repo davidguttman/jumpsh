@@ -19,6 +19,7 @@ function makeFullRecord() {
     override_port: null,
     override_docker_image: null,
     override_env: null,
+    desired_running: 0,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     schema_version: SCHEMA_VERSION,
@@ -37,7 +38,7 @@ describe('schema-definition', () => {
       'parent_project_id', 'is_worktree', 'branch_name',
       'assigned_port', 'override_build_command', 'override_start_command',
       'override_port', 'override_docker_image', 'override_env',
-      'created_at', 'updated_at', 'schema_version',
+      'desired_running', 'created_at', 'updated_at', 'schema_version',
     ];
     assert.deepEqual(Object.keys(SCHEMA), expected);
   });
@@ -86,6 +87,7 @@ describe('migrateRecord', () => {
     const migrated = migrateRecord(record);
     assert.equal(migrated.is_worktree, 0);
     assert.equal(migrated.description, null);
+    assert.equal(migrated.desired_running, 0);
     assert.equal(migrated.schema_version, SCHEMA_VERSION);
   });
 

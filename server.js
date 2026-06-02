@@ -21,6 +21,12 @@ import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { certsExist, downloadCerts } from './lib/commands/certs.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
+import {
+  autoStartDesiredProjects,
+  restartProjectWithWorktrees,
+  startProjectWithWorktrees,
+  stopProjectWithWorktrees,
+} from './lib/desired-running.js';
 
 dotenv.config({ quiet: true });
 
@@ -259,7 +265,7 @@ app.post('/projects', (req, res) => {
           // Start watching for worktrees
           worktreeScanner.watchProject(project);
           // Auto-start the project, but redirect as soon as the in-flight state is visible.
-          docker.start(project).catch((startErr) => {
+          startProjectWithWorktrees(db, docker, project).catch((startErr) => {
             console.error("Auto-start failed for project " + id + ":", startErr.message);
           });
         }
@@ -324,7 +330,7 @@ app.post('/projects/:id/start', (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    const result = await docker.start(project);
+    const { result } = await startProjectWithWorktrees(db, docker, project);
     if (result.alreadyStarting) {
       const enriched = await enrichProjectStatus(docker, project);
       return res.status(202).json({ success: true, alreadyStarting: true, status: enriched.status, health: enriched.health });
@@ -332,14 +338,6 @@ app.post('/projects/:id/start', (req, res) => {
     if (result.success) {
       const enriched = await enrichProjectStatus(docker, project);
       res.json({ success: true, status: enriched.status, health: enriched.health });
-
-      // Auto-start worktrees (fire-and-forget)
-      db.getWorktreesForProject(id, (err, worktrees) => {
-        if (err || !worktrees) return;
-        for (const wt of worktrees) {
-          docker.start(wt).catch(function(e) { console.error("Worktree start failed for " + wt.path + ":", e.message); });
-        }
-      });
     } else {
       res.status(500).json({ error: result.error, buildLog: result.buildLog || null });
     }
@@ -355,17 +353,9 @@ app.post('/projects/:id/stop', (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    const result = await docker.stop(project);
+    const { result } = await stopProjectWithWorktrees(db, docker, project);
     if (result.success) {
       res.json({ success: true });
-
-      // Auto-stop worktrees (fire-and-forget)
-      db.getWorktreesForProject(id, (err, worktrees) => {
-        if (err || !worktrees) return;
-        for (const wt of worktrees) {
-          docker.stop(wt).catch(function(e) { console.error("Worktree stop failed for " + wt.path + ":", e.message); });
-        }
-      });
     } else {
       res.status(500).json({ error: result.error });
     }
@@ -381,23 +371,9 @@ app.post('/projects/:id/restart', (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    // Gather worktrees
-    const worktrees = await new Promise((resolve) => {
-      db.getWorktreesForProject(id, (err, wts) => resolve(err ? [] : wts || []));
-    });
-
-    // Stop all (main + worktrees)
-    await Promise.all([project, ...worktrees].map(p => docker.stop(p)));
-
-    // Start all (main + worktrees)
-    const result = await docker.start(project);
-    if (!result.success) {
+    const { result } = await restartProjectWithWorktrees(db, docker, project);
+    if (!result.success && !result.alreadyStarting) {
       return res.status(500).json({ error: result.error, buildLog: result.buildLog || null });
-    }
-
-    // Fire-and-forget worktree starts
-    for (const wt of worktrees) {
-      docker.start(wt);
     }
 
     const enriched = await enrichProjectStatus(docker, project);
@@ -956,8 +932,9 @@ server.listen(config.port, async () => {
     console.warn('Could not write server.json:', err.message);
   }
 
+  await db.ready();
+
   if (devMode) {
-    await db.ready();
     await initDevMode();
   }
 
@@ -975,8 +952,11 @@ server.listen(config.port, async () => {
 ╚══════════════════════════════════════════════════╝
   `);
 
-  // Start watching all projects for worktrees
-  worktreeScanner.scanAllProjects();
+  // Start watching all projects for worktrees, then restore containers that were desired-running.
+  await worktreeScanner.scanAllProjects();
+  autoStartDesiredProjects(db, docker).catch(err => {
+    console.error('Failed to auto-start desired projects:', err.message);
+  });
 
 });
 

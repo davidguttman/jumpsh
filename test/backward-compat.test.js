@@ -88,6 +88,7 @@ describe('Database backward compatibility', () => {
     assert.equal(project.is_worktree, 0);
     assert.equal(project.branch_name, null);
     assert.equal(project.parent_project_id, null);
+    assert.equal(project.desired_running, 0);
   });
 
   it('getAllProjects applies defaults to legacy records', async () => {
@@ -120,6 +121,7 @@ describe('Database backward compatibility', () => {
           override_port: 3000,
           override_docker_image: 'node:20',
           override_env: [{ key: 'FOO', value: 'bar' }],
+          desired_running: 1,
           created_at: '2024-06-01T00:00:00.000Z',
           updated_at: '2024-06-01T00:00:00.000Z',
         },
@@ -135,6 +137,7 @@ describe('Database backward compatibility', () => {
     const legacy = all.find(p => p.name === 'old-app');
     assert.equal(legacy.override_env, null);
     assert.equal(legacy.is_worktree, 0);
+    assert.equal(legacy.desired_running, 0);
 
     const modern = all.find(p => p.name === 'new-app');
     assert.equal(modern.override_docker_image, 'node:20');
@@ -164,6 +167,7 @@ describe('Database backward compatibility', () => {
     assert.ok(p);
     assert.equal(p.override_env, null);
     assert.equal(p.override_docker_image, null);
+    assert.equal(p.desired_running, 0);
   });
 });
 
@@ -197,7 +201,7 @@ describe('Database record shape stability', () => {
       'parent_project_id', 'is_worktree', 'branch_name',
       'assigned_port', 'override_build_command', 'override_start_command',
       'override_port', 'override_docker_image', 'override_env',
-      'created_at', 'updated_at',
+      'desired_running', 'created_at', 'updated_at',
     ];
 
     for (const field of expectedFields) {
@@ -222,6 +226,7 @@ describe('Database record shape stability', () => {
     assert.equal(record.override_port, null);
     assert.equal(record.override_docker_image, null);
     assert.equal(record.override_env, null);
+    assert.equal(record.desired_running, 0);
   });
 });
 
@@ -244,6 +249,7 @@ describe('Project schema snapshot', () => {
       'override_port',
       'override_docker_image',
       'override_env',
+      'desired_running',
       'created_at',
       'updated_at',
       'schema_version',

@@ -32,6 +32,10 @@ export function createMockDb(initialProjects = []) {
       track('getAllProjects', []);
       cb(null, projects.filter(p => !p.is_worktree).sort((a, b) => a.name.localeCompare(b.name)));
     },
+    getAllProjectsIncludingWorktrees(cb) {
+      track('getAllProjectsIncludingWorktrees', []);
+      cb(null, [...projects].sort((a, b) => a.id - b.id));
+    },
     getNextPort(cb) {
       track('getNextPort', []);
       cb(null, 10042);
@@ -40,6 +44,14 @@ export function createMockDb(initialProjects = []) {
       track('updateProject', [id, updates]);
       const p = projects.find(x => x.id === parseInt(id, 10));
       if (p) Object.assign(p, updates);
+      cb(null);
+    },
+    setDesiredRunning(ids, desired, cb) {
+      track('setDesiredRunning', [ids, desired]);
+      const wanted = new Set((Array.isArray(ids) ? ids : [ids]).map(id => parseInt(id, 10)));
+      for (const p of projects) {
+        if (wanted.has(p.id)) p.desired_running = desired ? 1 : 0;
+      }
       cb(null);
     },
     releasePort(id, cb) {
@@ -57,7 +69,7 @@ export function createMockDb(initialProjects = []) {
       if (existing) {
         Object.assign(existing, wt);
       } else {
-        projects.push({ id: nextId++, is_worktree: 1, ...wt });
+        projects.push({ id: nextId++, is_worktree: 1, desired_running: 0, ...wt });
       }
       cb(null);
     },

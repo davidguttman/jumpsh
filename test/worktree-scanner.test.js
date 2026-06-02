@@ -90,6 +90,116 @@ describe('WorktreeScanner scanWorktrees', () => {
     assert.equal(upsertCalls.length, 1);
   });
 
+  it('does not clear an existing worktree desired-running flag during a non-desired parent scan', async () => {
+    initGitRepo(projectDir);
+    const wtDir = path.join(projectDir, '.worktrees');
+    fs.mkdirSync(wtDir);
+    const worktreePath = path.join(wtDir, 'feature-x');
+    execSync(`git worktree add ${worktreePath} -b feature-x`, {
+      cwd: projectDir,
+      stdio: 'ignore',
+    });
+    mockDb.projects.push({
+      id: 2,
+      name: 'test (feature-x)',
+      path: worktreePath,
+      subdomain: 'myapp--feature-x',
+      parent_project_id: 1,
+      branch_name: 'feature-x',
+      is_worktree: 1,
+      desired_running: 1,
+    });
+
+    const project = { id: 1, path: projectDir, name: 'test', subdomain: 'myapp', desired_running: 0 };
+    await scanner.scanWorktrees(project);
+
+    assert.equal(mockDb.projects.find(p => p.id === 2).desired_running, 1);
+    const upsertCall = mockDb.calls.find(c => c.method === 'upsertWorktree');
+    assert.equal(Object.hasOwn(upsertCall.args[0], 'desired_running'), false);
+  });
+
+  it('preserves an explicitly stopped existing worktree during a desired parent scan', async () => {
+    initGitRepo(projectDir);
+    const wtDir = path.join(projectDir, '.worktrees');
+    fs.mkdirSync(wtDir);
+    const worktreePath = path.join(wtDir, 'feature-x');
+    execSync(`git worktree add ${worktreePath} -b feature-x`, {
+      cwd: projectDir,
+      stdio: 'ignore',
+    });
+    mockDb.projects.push({
+      id: 2,
+      name: 'test (feature-x)',
+      path: worktreePath,
+      subdomain: 'myapp--feature-x',
+      parent_project_id: 1,
+      branch_name: 'feature-x',
+      is_worktree: 1,
+      desired_running: 0,
+    });
+
+    const project = { id: 1, path: projectDir, name: 'test', subdomain: 'myapp', desired_running: 1 };
+    await scanner.scanWorktrees(project);
+
+    assert.equal(mockDb.projects.find(p => p.id === 2).desired_running, 0);
+    assert.equal(mockDocker._startCalls.length, 0);
+    const upsertCall = mockDb.calls.find(c => c.method === 'upsertWorktree');
+    assert.equal(Object.hasOwn(upsertCall.args[0], 'desired_running'), false);
+  });
+
+  it('continues scanAllProjects when parent status lookup fails', async () => {
+    initGitRepo(projectDir);
+    const wtDir = path.join(projectDir, '.worktrees');
+    fs.mkdirSync(wtDir);
+    const worktreePath = path.join(wtDir, 'feature-x');
+    execSync(`git worktree add ${worktreePath} -b feature-x`, {
+      cwd: projectDir,
+      stdio: 'ignore',
+    });
+    mockDb.projects.push({ id: 1, path: projectDir, name: 'test', subdomain: 'test', is_worktree: 0 });
+    mockDocker.getStatus = async () => { throw new Error('status unavailable'); };
+
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      const result = await scanner.scanAllProjects();
+      assert.equal(result.length, 1);
+      assert.equal(result[0].length, 1);
+    } finally {
+      console.error = originalError;
+    }
+
+    assert.equal(mockDocker._startCalls.length, 0);
+    assert.equal(mockDb.calls.some(c => c.method === 'upsertWorktree'), true);
+  });
+
+  it('keeps scanning other projects when one project scan fails', async () => {
+    const badProjectDir = path.join(tmpDir, 'bad-project');
+    fs.mkdirSync(badProjectDir);
+    fs.writeFileSync(path.join(badProjectDir, '.worktrees'), 'not a directory');
+
+    const goodProjectDir = path.join(tmpDir, 'good-project');
+    fs.mkdirSync(goodProjectDir);
+    initGitRepo(goodProjectDir);
+    fs.mkdirSync(path.join(goodProjectDir, '.worktrees'));
+
+    mockDb.projects.push(
+      { id: 1, path: badProjectDir, name: 'bad', subdomain: 'bad', is_worktree: 0 },
+      { id: 2, path: goodProjectDir, name: 'good', subdomain: 'good', is_worktree: 0 },
+    );
+
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      const result = await scanner.scanAllProjects();
+      assert.equal(result.length, 2);
+    } finally {
+      console.error = originalError;
+    }
+
+    assert.equal(scanner.watchers.has(2), true);
+  });
+
   it('removes stale worktrees from db', async () => {
     initGitRepo(projectDir);
     const wtDir = path.join(projectDir, '.worktrees');
