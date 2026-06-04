@@ -1,22 +1,28 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'path';
+import fs from 'fs';
 import { EventEmitter } from 'node:events';
 import DockerManager from '../services/DockerManager.js';
 import { createMockDb } from './helpers/mock-db.js';
 import { createMockSpawner } from './helpers/mock-spawner.js';
 import { makeTmpDir, cleanTmpDir, writeFile } from './helpers/fixtures.js';
 
-let dm, mockDb, tmpDir;
+let dm, mockDb, tmpDir, tmpHome, originalHome;
 
 beforeEach(() => {
+  originalHome = process.env.HOME;
+  tmpHome = makeTmpDir();
+  process.env.HOME = tmpHome;
   mockDb = createMockDb();
   dm = new DockerManager(mockDb, { spawner: createMockSpawner() });
   tmpDir = makeTmpDir();
 });
 
 afterEach(() => {
+  process.env.HOME = originalHome;
   cleanTmpDir(tmpDir);
+  cleanTmpDir(tmpHome);
 });
 
 // ---- Pure / internal methods ----
@@ -110,6 +116,30 @@ describe('DockerManager getComposeFile', () => {
     assert.equal(composePath, path.join(tmpDir, 'docker-compose.yaml'));
     assert.equal(isGenerated, false);
   });
+
+
+  it('keeps worktree docker-compose.yml as the base compose definition', () => {
+    writeFile(tmpDir, 'docker-compose.yml', 'services:\n');
+    const project = { path: tmpDir, subdomain: 'test--feature-x', name: 'test feature', is_worktree: 1 };
+    const { composePath, isGenerated } = dm.getComposeFile(project);
+    assert.equal(composePath, path.join(tmpDir, 'docker-compose.yml'));
+    assert.equal(isGenerated, false);
+  });
+
+  it('layers jump-owned compose override when present', () => {
+    writeFile(tmpDir, 'docker-compose.yml', 'services:\n');
+    const overrideDir = path.join(tmpHome, '.jump.sh', 'test--feature-x');
+    fs.mkdirSync(overrideDir, { recursive: true });
+    const overridePath = path.join(overrideDir, 'docker-compose.jump.yml');
+    fs.writeFileSync(overridePath, 'services:\n  app:\n    ports:\n      - "10042:3000"\n');
+
+    const project = { path: tmpDir, subdomain: 'test--feature-x', name: 'test feature', is_worktree: 1 };
+    assert.deepEqual(dm.getRuntimeComposeFile(project), [
+      path.join(tmpDir, 'docker-compose.yml'),
+      overridePath,
+    ]);
+  });
+
 
   it('returns null when no compose file found', () => {
     const project = { path: tmpDir, subdomain: 'nofile', name: 'nofile' };

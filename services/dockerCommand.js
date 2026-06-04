@@ -83,7 +83,7 @@ export function getComposeCommand() {
  * Build spawn-friendly { command, args } for a compose invocation.
  * All paths are passed as discrete args — no shell interpolation.
  * @param {string|string[]} subcommand - e.g. 'up -d --build' or ['up', '-d', '--build']
- * @param {string} [composeFile] - path to compose file (uses -f flag if provided)
+ * @param {string|string[]} [composeFile] - path(s) to compose files (uses -f for each)
  * @returns {{ command: string, args: string[] }}
  * @throws {Error} if no compose command is available
  */
@@ -95,8 +95,9 @@ export function buildComposeSpawn(subcommand, composeFile) {
   const parts = cmd.split(' '); // ['docker', 'compose'] or ['docker-compose']
   const command = parts[0];
   const args = [...parts.slice(1)];
-  if (composeFile) {
-    args.push('-f', composeFile);
+  const composeFiles = Array.isArray(composeFile) ? composeFile : (composeFile ? [composeFile] : []);
+  for (const file of composeFiles) {
+    args.push('-f', file);
   }
   const subArgs = Array.isArray(subcommand) ? subcommand : subcommand.split(' ');
   args.push(...subArgs);
@@ -106,7 +107,7 @@ export function buildComposeSpawn(subcommand, composeFile) {
 /**
  * Execute a compose command safely via execFile (no shell).
  * @param {string|string[]} subcommand
- * @param {string} [composeFile]
+ * @param {string|string[]} [composeFile]
  * @param {object} [opts] - options passed to execFile (cwd, timeout, etc.)
  * @returns {Promise<{ stdout: string, stderr: string }>}
  */
