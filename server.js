@@ -23,6 +23,7 @@ import { localCertStatus } from './lib/cert-status.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
 import { encodeContextHost } from './lib/context-host.js';
+import { sortWorktreesByRecency } from './lib/worktree-recency.js';
 import {
   autoStartDesiredProjects,
   restartProjectWithWorktrees,
@@ -191,6 +192,9 @@ app.get('/', async (req, res) => {
       }
       worktreesByParent[p.parent_project_id].push(p);
     }
+    await Promise.all(Object.keys(worktreesByParent).map(async (parentId) => {
+      worktreesByParent[parentId] = await sortWorktreesByRecency(worktreesByParent[parentId]);
+    }));
 
     // Pass expandName for client-side auto-expand on load
     const expandName = req.query.expand || null;
