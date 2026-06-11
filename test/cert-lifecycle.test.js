@@ -241,6 +241,115 @@ describe('jump.sh certs default download validation and atomic writes', () => {
   });
 });
 
+describe('HTTPS startup cert refresh selection', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-startup-certs-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('refreshes a registered user cert instead of the legacy default cert when that cert is unhealthy', async () => {
+    const userDir = path.join(tmpDir, 'certs', 'nac');
+    fs.mkdirSync(userDir, { recursive: true });
+    fs.writeFileSync(path.join(userDir, 'fullchain.pem'), 'not a certificate');
+    fs.writeFileSync(path.join(userDir, 'privkey.pem'), 'not a private key');
+
+    const calls = [];
+    const { ensureHttpsCerts } = await import(`../lib/commands/certs.js?startup-user-refresh-${Date.now()}`);
+    const result = await ensureHttpsCerts({
+      certsDir: path.join(tmpDir, 'certs'),
+      domain: 'nac.jump.sh',
+      downloadDefault: async () => calls.push(['default']),
+      downloadUser: async (username) => calls.push(['user', username]),
+      log: () => {},
+    });
+
+    assert.deepEqual(calls, [['user', 'nac']]);
+    assert.equal(result.results.length, 1);
+    assert.equal(result.results[0].kind, 'remote');
+    assert.equal(result.results[0].username, 'nac');
+    assert.equal(result.results[0].before.status, 'malformed');
+  });
+
+  it('refreshes a registered user cert when the domain is known but local user cert files are missing', async () => {
+    const certsDir = path.join(tmpDir, 'certs');
+    fs.mkdirSync(certsDir, { recursive: true });
+
+    const calls = [];
+    const { ensureHttpsCerts } = await import(`../lib/commands/certs.js?startup-user-missing-${Date.now()}`);
+    const result = await ensureHttpsCerts({
+      certsDir,
+      domain: 'nac.jump.sh',
+      downloadDefault: async () => calls.push(['default']),
+      downloadUser: async (username) => calls.push(['user', username]),
+      log: () => {},
+    });
+
+    assert.deepEqual(calls, [['user', 'nac']]);
+    assert.equal(result.results.length, 1);
+    assert.equal(result.results[0].kind, 'remote');
+    assert.equal(result.results[0].username, 'nac');
+    assert.equal(result.results[0].before.status, 'missing');
+  });
+
+  it('preserves legacy default cert download behavior when no registered user is detected', async () => {
+    const certsDir = path.join(tmpDir, 'certs');
+    fs.mkdirSync(certsDir, { recursive: true });
+
+    const calls = [];
+    const { ensureHttpsCerts } = await import(`../lib/commands/certs.js?startup-default-refresh-${Date.now()}`);
+    const result = await ensureHttpsCerts({
+      certsDir,
+      domain: 'jump.sh',
+      downloadDefault: async () => calls.push(['default']),
+      downloadUser: async (username) => calls.push(['user', username]),
+      log: () => {},
+    });
+
+    assert.deepEqual(calls, [['default']]);
+    assert.equal(result.results.length, 1);
+    assert.equal(result.results[0].kind, 'default');
+    assert.equal(result.results[0].before.status, 'missing');
+  });
+
+  it('refreshes every unhealthy cert pair the server would serve, and a failed refresh does not block the rest', async () => {
+    const certsDir = path.join(tmpDir, 'certs');
+    for (const username of ['alice', 'bob']) {
+      const userDir = path.join(certsDir, username);
+      fs.mkdirSync(userDir, { recursive: true });
+      fs.writeFileSync(path.join(userDir, 'fullchain.pem'), 'not a certificate');
+      fs.writeFileSync(path.join(userDir, 'privkey.pem'), 'not a private key');
+    }
+    fs.writeFileSync(path.join(certsDir, 'server.pem'), 'not a certificate');
+    fs.writeFileSync(path.join(certsDir, 'server-key.pem'), 'not a private key');
+
+    const calls = [];
+    const { ensureHttpsCerts } = await import(`../lib/commands/certs.js?startup-multi-refresh-${Date.now()}`);
+    const result = await ensureHttpsCerts({
+      certsDir,
+      domain: 'alice.jump.sh',
+      downloadDefault: async () => calls.push(['default']),
+      downloadUser: async (username) => {
+        calls.push(['user', username]);
+        if (username === 'alice') throw new Error('api unreachable');
+      },
+      log: () => {},
+    });
+
+    assert.deepEqual(calls.sort(), [['default'], ['user', 'alice'], ['user', 'bob']]);
+    const alice = result.results.find((r) => r.username === 'alice');
+    const bob = result.results.find((r) => r.username === 'bob');
+    const fallback = result.results.find((r) => r.kind === 'default');
+    assert.equal(alice.error, 'api unreachable');
+    assert.equal(bob.error, undefined);
+    assert.ok(fallback);
+  });
+});
+
 describe('downloadCertsForUser cert validation and atomic writes', () => {
   let homeDir;
   let originalHome;

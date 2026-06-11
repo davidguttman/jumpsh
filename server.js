@@ -18,7 +18,7 @@ import SubdomainProxy from './services/SubdomainProxy.js';
 import { detectProjectType } from './services/ProjectDetector.js';
 import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
-import { certsExist, downloadCerts } from './lib/commands/certs.js';
+import { ensureHttpsCerts } from './lib/commands/certs.js';
 import { localCertStatus } from './lib/cert-status.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
@@ -704,12 +704,15 @@ async function findNextAvailablePort(startPort, maxDelta = 25) {
 }
 
 
-if (config.https && !certsExist()) {
-  console.warn(`HTTPS enabled and certs missing at ${config.certPath}; downloading from jump.sh...`);
+if (config.https) {
   try {
-    await downloadCerts();
+    await ensureHttpsCerts({
+      certsDir: config.certPath,
+      domain: config.domain,
+      log: (message) => console.warn(`HTTPS enabled: ${message}`),
+    });
   } catch (e) {
-    console.error(`Automatic cert download failed: ${e.message}`);
+    console.error(`Automatic cert refresh failed: ${e.message}`);
   }
 }
 
