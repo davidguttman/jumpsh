@@ -337,6 +337,29 @@ main {
   text-align: right;
 }
 
+.project-row-status {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.project-row-status.error {
+  color: #ff6b6b;
+}
+
+.project-detail-status {
+  align-self: center;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.project-detail-status.error {
+  color: #ff6b6b;
+}
+
 .project-row-worktrees {
   display: flex;
   gap: 0.4rem;

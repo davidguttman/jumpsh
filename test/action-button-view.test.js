@@ -10,12 +10,14 @@ describe('_action_btn partial', () => {
     const html = await ejs.renderFile(templatePath, { id: 1, status: 'starting' });
     assert.match(html, /Starting\.\.\./);
     assert.match(html, /disabled/);
+    assert.match(html, /data-project-status="starting"/);
     assert.doesNotMatch(html, /onclick="startProject/);
   });
 
   it('keeps truly stopped projects startable', async () => {
     const html = await ejs.renderFile(templatePath, { id: 1, status: 'stopped' });
     assert.match(html, /onclick="startProject\(1\)"/);
+    assert.match(html, /data-project-status="stopped"/);
     assert.match(html, />Start</);
   });
 });

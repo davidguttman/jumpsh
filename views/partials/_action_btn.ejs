@@ -1,8 +1,8 @@
 <% /* Expects: id, status, btnClass (optional extra classes) */ %>
 <% if (typeof status !== 'undefined' && status === 'running') { %>
-  <button class="btn btn-danger<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" onclick="stopProject(<%= id %>)">Stop</button>
+  <button class="btn btn-danger<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" data-project-action-btn="<%= id %>" data-project-status="running" onclick="stopProject(<%= id %>)">Stop</button>
 <% } else if (typeof status !== 'undefined' && status === 'starting') { %>
-  <button class="btn btn-success<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" disabled aria-busy="true">Starting...</button>
+  <button class="btn btn-success<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" data-project-action-btn="<%= id %>" data-project-status="starting" disabled aria-busy="true">Starting...</button>
 <% } else { %>
-  <button class="btn btn-success<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" onclick="startProject(<%= id %>)">Start</button>
+  <button class="btn btn-success<%= typeof btnClass !== 'undefined' ? ' ' + btnClass : '' %>" id="project-btn-<%= id %>" data-project-action-btn="<%= id %>" data-project-status="stopped" onclick="startProject(<%= id %>)">Start</button>
 <% } %>

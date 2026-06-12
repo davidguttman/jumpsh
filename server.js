@@ -327,6 +327,79 @@ app.get('/projects/:id', (req, res) => {
   });
 });
 
+function dbGetWorktreesForProject(id) {
+  return new Promise((resolve, reject) => {
+    db.getWorktreesForProject(id, (err, worktrees) => {
+      if (err) return reject(err);
+      resolve(worktrees || []);
+    });
+  });
+}
+
+async function relatedProjectsForStatus(project) {
+  if (project.is_worktree) return [project];
+  const worktrees = await dbGetWorktreesForProject(project.id);
+  return [project, ...worktrees];
+}
+
+function renderProjectActionHtml(res, id, status) {
+  return new Promise((resolve, reject) => {
+    res.render('partials/_action_btn', { id, status }, (renderErr, actionHtml) => {
+      if (renderErr) {
+        renderErr.actionRenderFailed = true;
+        return reject(renderErr);
+      }
+      resolve(actionHtml.trim());
+    });
+  });
+}
+
+async function projectStatusSnapshot(req, res, project) {
+  const enriched = await enrichProjectStatus(docker, project);
+  const actionHtml = await renderProjectActionHtml(res, enriched.id, enriched.status);
+  return {
+    id: enriched.id,
+    status: enriched.status,
+    health: enriched.health,
+    actionHtml,
+    isWorktree: Boolean(enriched.is_worktree),
+    parentProjectId: enriched.parent_project_id || null,
+    name: enriched.name,
+    branchName: enriched.branch_name || null,
+    url: enriched.subdomain ? req.requestConfig.projectUrl(enriched.subdomain) : null
+  };
+}
+
+// Project status/action HTML — used by the listing to reconcile after lifecycle changes
+app.get('/api/projects/:id/status', (req, res) => {
+  const { id } = req.params;
+
+  db.getProject(id, async (err, project) => {
+    if (err || !project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    try {
+      const relatedProjects = await relatedProjectsForStatus(project);
+      const related = await Promise.all(relatedProjects.map((relatedProject) => {
+        return projectStatusSnapshot(req, res, relatedProject);
+      }));
+      const primary = related.find((snapshot) => String(snapshot.id) === String(project.id)) || related[0];
+      res.json({
+        success: true,
+        ...primary,
+        related
+      });
+    } catch (statusErr) {
+      console.error('Project status reconciliation error:', statusErr.message);
+      if (statusErr.actionRenderFailed) {
+        return res.status(500).json({ error: 'Could not render project action' });
+      }
+      res.status(500).json({ error: 'Could not refresh project status' });
+    }
+  });
+});
+
 // Start project
 app.post('/projects/:id/start', (req, res) => {
   const { id } = req.params;

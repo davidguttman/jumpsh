@@ -50,6 +50,7 @@
           <div class="panel project-row <%= project.status %>"
                :class="{ expanded: expanded === '<%= project.name %>' }"
                data-project-name="<%= project.name %>"
+               data-project-id="<%= project.id %>"
                data-project-status="<%= project.status %>"
                x-show="expanded === '<%= project.name %>' || !filter || '<%= project.name.toLowerCase() %>'.includes(filter.toLowerCase())">
             <% if (projects.length > 1) { %>
@@ -73,9 +74,9 @@
                 <% for (let i = 0; i < Math.min(worktrees.length, 3); i++) { const wt = worktrees[i]; %>
                   <% const wtHealth = wt.health || 'unknown'; %>
                   <% if (wtHealth === 'healthy') { %>
-                    <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank" class="wt-chip"><%= wt.branch_name %></a>
+                    <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank" class="wt-chip" data-project-worktree-chip="<%= wt.id %>" data-project-worktree-url="<%= config.projectUrl(wt.subdomain) %>"><%= wt.branch_name %></a>
                   <% } else { %>
-                    <span class="wt-chip wt-chip-inactive"><%= wt.branch_name %></span>
+                    <span class="wt-chip wt-chip-inactive" data-project-worktree-chip="<%= wt.id %>" data-project-worktree-url="<%= config.projectUrl(wt.subdomain) %>"><%= wt.branch_name %></span>
                   <% } %>
                 <% } %>
                 <% if (worktrees.length > 3) { %>
@@ -84,6 +85,7 @@
               </span>
             <% } %>
             <%- include('partials/_action_btn', { id: project.id, status: project.status }) %>
+            <span class="project-row-status hidden" id="project-status-msg-<%= project.id %>" role="status" aria-live="polite"></span>
             <div class="project-row-detail"
                  x-show="expanded === '<%= project.name %>'"
                  x-html="detailCache['<%= project.name %>'] || ''">
@@ -163,13 +165,15 @@
 
           // Fetch detail partial
           this.loading = name;
+          showProjectRowStatus(id, 'Loading details...', false);
           try {
             var res = await fetch('/projects/' + id + '/detail-partial');
-            if (!res.ok) throw new Error('Failed to load');
+            if (!res.ok) throw new Error('Failed to load details (' + res.status + ')');
             var html = await res.text();
             this.detailCache[name] = html;
             this.expanded = name;
             this.loading = null;
+            clearProjectRowStatus(id);
             this._updateUrl(name);
             this.$nextTick(() => {
               this._activateScripts(name);
@@ -177,6 +181,8 @@
             });
           } catch (err) {
             this.loading = null;
+            showProjectRowStatus(id, 'Could not load details: ' + errorMessage(err), true);
+            refreshProjectStatus(id, { reason: 'detail load failed', retry: true });
             console.error('Error loading detail for ' + name + ':', err);
           }
         },
@@ -228,72 +234,338 @@
       };
     }
 
-    // Lightweight startup subscription for list-view action buttons
-    function _listSubscribeStartup(id, btn) {
+    function errorMessage(err) {
+      return (err && err.message) ? err.message : String(err || 'Unknown error');
+    }
+
+    function projectButtons(id) {
+      return Array.prototype.slice.call(document.querySelectorAll('[data-project-action-btn="' + id + '"]'));
+    }
+
+    function rowForProject(id) {
+      return document.querySelector('.project-row[data-project-id="' + id + '"]');
+    }
+
+    function detailActionsForProject(id) {
+      return document.querySelector('[data-project-detail-actions="' + id + '"]');
+    }
+
+    function statusElForProject(id) {
+      var el = document.getElementById('project-status-msg-' + id);
+      if (el) return el;
+      var row = rowForProject(id);
+      if (!row) return null;
+      el = document.createElement('span');
+      el.id = 'project-status-msg-' + id;
+      el.className = 'project-row-status hidden';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      row.appendChild(el);
+      return el;
+    }
+
+    function showProjectRowStatus(id, message, isError) {
+      var el = statusElForProject(id);
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = 'project-row-status' + (isError ? ' error' : '');
+      if (!message) el.classList.add('hidden');
+    }
+
+    function showProjectDetailStatus(id, message, isError) {
+      var el = document.getElementById('project-detail-status-' + id);
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = 'project-detail-status' + (isError ? ' error' : '');
+      if (!message) el.classList.add('hidden');
+    }
+
+    function showProjectFeedback(id, message, isError) {
+      showProjectRowStatus(id, message, isError);
+      showProjectDetailStatus(id, message, isError);
+    }
+
+    function clearProjectRowStatus(id) {
+      showProjectRowStatus(id, '', false);
+    }
+
+    function clearProjectFeedback(id) {
+      showProjectRowStatus(id, '', false);
+      showProjectDetailStatus(id, '', false);
+    }
+
+    function updateRowStatusClass(id, status) {
+      var row = rowForProject(id);
+      if (!row || !status) return;
+      row.dataset.projectStatus = status;
+      row.classList.remove('running', 'stopped', 'starting');
+      row.classList.add(status);
+    }
+
+    function updateWorktreeChips(snapshot) {
+      if (!snapshot || !snapshot.isWorktree) return;
+      var chips = Array.prototype.slice.call(document.querySelectorAll('[data-project-worktree-chip="' + snapshot.id + '"]'));
+      if (chips.length === 0) return;
+      var isHealthy = snapshot.health === 'healthy';
+      chips.forEach(function(chip) {
+        var tag = (chip.tagName || '').toLowerCase();
+        var text = chip.textContent;
+        var url = snapshot.url || chip.getAttribute('data-project-worktree-url') || '';
+        var next = chip;
+        if (isHealthy && url && tag !== 'a') {
+          next = document.createElement('a');
+          next.href = url;
+          next.setAttribute('target', '_blank');
+          chip.replaceWith(next);
+        } else if ((!isHealthy || !url) && tag === 'a') {
+          next = document.createElement('span');
+          chip.replaceWith(next);
+        }
+        next.textContent = text;
+        next.className = 'wt-chip' + (isHealthy && url ? '' : ' wt-chip-inactive');
+        next.setAttribute('data-project-worktree-chip', snapshot.id);
+        if (url) next.setAttribute('data-project-worktree-url', url);
+        if (isHealthy && url && next.tagName && next.tagName.toLowerCase() === 'a') {
+          next.href = url;
+          next.setAttribute('href', url);
+        }
+      });
+    }
+
+    function fallbackActionButtonHtml(id, status, useSmallButton) {
+      var extra = useSmallButton ? ' btn-sm' : '';
+      if (status === 'running') {
+        return '<button class="btn btn-danger' + extra + '" id="project-btn-' + id + '" data-project-action-btn="' + id + '" data-project-status="running" onclick="stopProject(' + id + ')">Stop</button>';
+      }
+      if (status === 'starting') {
+        return '<button class="btn btn-success' + extra + '" id="project-btn-' + id + '" data-project-action-btn="' + id + '" data-project-status="starting" disabled aria-busy="true">Starting...</button>';
+      }
+      return '<button class="btn btn-success' + extra + '" id="project-btn-' + id + '" data-project-action-btn="' + id + '" data-project-status="stopped" onclick="startProject(' + id + ')">Start</button>';
+    }
+
+    function detailActionHtml(id, status, actionHtml) {
+      var statusEl = document.getElementById('project-detail-status-' + id);
+      var statusHtml = statusEl ? statusEl.outerHTML : '<span class="project-detail-status hidden" id="project-detail-status-' + id + '" role="status" aria-live="polite"></span>';
+      var html = statusHtml;
+      if (status === 'running') html += '<button class="btn" onclick="restartProject(' + id + ')">Restart</button>';
+      html += actionHtml || fallbackActionButtonHtml(id, status, false);
+      return html;
+    }
+
+    function updateDetailActions(id, status, actionHtml) {
+      var actions = detailActionsForProject(id);
+      if (!actions) return;
+      actions.innerHTML = detailActionHtml(id, status, actionHtml);
+    }
+
+    function replaceProjectButtons(id, status, actionHtml) {
+      var buttons = projectButtons(id);
+      buttons.forEach(function(btn) {
+        var wrapper = document.createElement('span');
+        wrapper.innerHTML = actionHtml || fallbackActionButtonHtml(id, status, btn.classList.contains('btn-sm'));
+        var next = wrapper.firstElementChild;
+        if (next && btn.classList.contains('btn-sm') && !next.classList.contains('btn-sm')) next.classList.add('btn-sm');
+        if (next) btn.replaceWith(next);
+      });
+      updateDetailActions(id, status, actionHtml);
+    }
+
+    function setProjectButtonBusy(id, label) {
+      projectButtons(id).forEach(function(btn) {
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.textContent = label;
+      });
+    }
+
+    function enableProjectButtonFallback(id, status) {
+      replaceProjectButtons(id, status || 'stopped');
+      updateRowStatusClass(id, status || 'stopped');
+    }
+
+    async function parseJsonResponse(res) {
+      var data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        var err = new Error(data.error || ('Request failed (' + res.status + ')'));
+        err.responseData = data;
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
+
+    function showProjectBuildLog(id, content) {
+      if (!content) return;
+      var section = document.getElementById('build-logs-section-' + id);
+      var output = document.getElementById('build-logs-output-' + id);
+      if (!section || !output) return;
+      output.textContent = content;
+      section.classList.remove('hidden');
+      output.classList.remove('hidden');
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function showBuildLogFromResponse(id, data) {
+      if (data && data.buildLog) showProjectBuildLog(id, data.buildLog);
+    }
+
+    function statusSnapshotsFromResponse(data) {
+      if (!data) return [];
+      if (Array.isArray(data.related) && data.related.length > 0) return data.related;
+      return [data];
+    }
+
+    function reconcileProjectStatusSnapshot(snapshot) {
+      if (!snapshot || typeof snapshot.id === 'undefined') return;
+      replaceProjectButtons(snapshot.id, snapshot.status, snapshot.actionHtml);
+      updateRowStatusClass(snapshot.id, snapshot.status);
+      updateWorktreeChips(snapshot);
+      clearProjectRowStatus(snapshot.id);
+      if (snapshot.status === 'starting' && projectButtons(snapshot.id).length > 0) subscribeProjectStartup(snapshot.id);
+    }
+
+    function reconcileProjectStatuses(data) {
+      var snapshots = statusSnapshotsFromResponse(data);
+      snapshots.forEach(reconcileProjectStatusSnapshot);
+      return snapshots;
+    }
+
+    async function refreshProjectStatus(id, opts) {
+      opts = opts || {};
+      try {
+        var res = await fetch('/api/projects/' + id + '/status', { headers: { 'Accept': 'application/json' } });
+        var data = await parseJsonResponse(res);
+        reconcileProjectStatuses(data);
+        return data;
+      } catch (err) {
+        showProjectFeedback(id, 'Could not refresh status' + (opts.reason ? ' after ' + opts.reason : '') + ': ' + errorMessage(err), true);
+        if (opts.retry) {
+          setTimeout(function() { refreshProjectStatus(id, { reason: 'retry', fallbackStatus: opts.fallbackStatus }); }, opts.retryDelay || 2000);
+        }
+        if (opts.fallbackStatus) enableProjectButtonFallback(id, opts.fallbackStatus);
+        return null;
+      }
+    }
+
+    window._projectStartupStreams = window._projectStartupStreams || {};
+    window._projectStartupBuildLines = window._projectStartupBuildLines || {};
+    function updateDetailStartupProgress(id, data) {
+      var badge = document.getElementById('status-indicator-' + id);
+      var progress = document.getElementById('startup-progress-' + id);
+      if (badge) {
+        badge.className = data.error ? 'status-indicator unhealthy' : 'status-indicator starting';
+        badge.textContent = data.error ? 'ERROR' : 'STARTING...';
+      }
+      if (progress) {
+        progress.classList.remove('hidden');
+        if (data.step && data.totalSteps) progress.textContent = 'Step ' + data.step + '/' + data.totalSteps + ': ' + (data.label || '');
+        if (data.error) progress.textContent = data.error;
+      }
+    }
+
+    function subscribeProjectStartup(id) {
+      if (window._projectStartupStreams[id]) return window._projectStartupStreams[id];
+      if (projectButtons(id).length === 0) return null;
+      window._projectStartupBuildLines[id] = [];
       var es = new EventSource('/projects/' + id + '/startup');
+      window._projectStartupStreams[id] = es;
       es.onmessage = function(e) {
         var data = JSON.parse(e.data);
+        if (data.buildLine) window._projectStartupBuildLines[id].push(data.buildLine);
+        updateDetailStartupProgress(id, data);
         if (data.step && data.totalSteps) {
-          btn.textContent = 'Step ' + data.step + '/' + data.totalSteps;
+          setProjectButtonBusy(id, 'Step ' + data.step + '/' + data.totalSteps);
+          showProjectFeedback(id, data.label ? 'Starting: ' + data.label : 'Starting...', false);
         }
-        if (data.done && !data.error) { es.close(); location.reload(); }
-        if (data.error) { es.close(); btn.disabled = false; btn.textContent = 'Start'; }
+        if (data.done && !data.error) {
+          es.close();
+          delete window._projectStartupStreams[id];
+          delete window._projectStartupBuildLines[id];
+          refreshProjectStatus(id, { reason: 'startup completed', retry: true, fallbackStatus: 'running' });
+        }
+        if (data.error) {
+          es.close();
+          delete window._projectStartupStreams[id];
+          showProjectBuildLog(id, data.buildLog || (window._projectStartupBuildLines[id] || []).join('\n'));
+          delete window._projectStartupBuildLines[id];
+          showProjectFeedback(id, 'Startup failed: ' + data.error, true);
+          refreshProjectStatus(id, { reason: 'startup failed', retry: true, fallbackStatus: 'stopped' });
+        }
       };
-      es.onerror = function() { es.close(); setTimeout(function() { location.reload(); }, 2000); };
+      es.onerror = function() {
+        es.close();
+        delete window._projectStartupStreams[id];
+        showProjectBuildLog(id, (window._projectStartupBuildLines[id] || []).join('\n'));
+        delete window._projectStartupBuildLines[id];
+        showProjectFeedback(id, 'Startup status connection lost; refreshing...', true);
+        refreshProjectStatus(id, { reason: 'startup stream disconnected', retry: true, fallbackStatus: 'stopped' });
+      };
+      return es;
     }
 
-    // List-view start/stop: use event.target for button feedback.
-    // The detail partial may define richer versions of startProject/stopProject;
-    // these only apply if the partial hasn't already defined them.
-    if (!window.startProject) {
-      window.startProject = async function(id) {
-        var btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Starting...';
-        _listSubscribeStartup(id, btn);
-        try {
-          var res = await fetch('/projects/' + id + '/start', { method: 'POST' });
-          if (!res.ok) {
-            var data = await res.json();
-            if (res.status === 409 && (data.alreadyStarting || /already starting/i.test(data.error || ''))) {
-              btn.disabled = true;
-              btn.textContent = 'Starting...';
-              _listSubscribeStartup(id, btn);
-              return;
-            }
-            alert('Error: ' + data.error);
-            btn.disabled = false;
-            btn.textContent = 'Start';
-          }
-        } catch (err) {
-          alert('Error: ' + err.message);
-          btn.disabled = false;
-          btn.textContent = 'Start';
-        }
-      };
+    async function postProjectLifecycle(id, action) {
+      var res = await fetch('/projects/' + id + '/' + action, { method: 'POST', headers: { 'Accept': 'application/json' } });
+      return parseJsonResponse(res);
     }
 
-    if (!window.stopProject) {
-      window.stopProject = async function(id) {
-        var btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Stopping...';
-        try {
-          var res = await fetch('/projects/' + id + '/stop', { method: 'POST' });
-          if (res.ok) { location.reload(); }
-          else {
-            var data = await res.json();
-            alert('Error: ' + data.error);
-            btn.disabled = false;
-            btn.textContent = 'Stop';
-          }
-        } catch (err) {
-          alert('Error: ' + err.message);
-          btn.disabled = false;
-          btn.textContent = 'Stop';
+    window.startProject = async function(id) {
+      clearProjectFeedback(id);
+      showProjectDetailStatus(id, 'Starting...', false);
+      setProjectButtonBusy(id, 'Starting...');
+      subscribeProjectStartup(id);
+      try {
+        var data = await postProjectLifecycle(id, 'start');
+        if (data.status) {
+          reconcileProjectStatusSnapshot({ id: id, status: data.status, health: data.health });
         }
-      };
-    }
+        refreshProjectStatus(id, { reason: 'start request', retry: true, fallbackStatus: data.status || 'starting' });
+        return data;
+      } catch (err) {
+        showBuildLogFromResponse(id, err.responseData);
+        showProjectFeedback(id, 'Start failed: ' + errorMessage(err), true);
+        refreshProjectStatus(id, { reason: 'start failure', retry: true, fallbackStatus: 'stopped' });
+        return { ok: false, error: err };
+      }
+    };
+
+    window.stopProject = async function(id, opts) {
+      opts = opts || {};
+      clearProjectFeedback(id);
+      showProjectDetailStatus(id, 'Stopping...', false);
+      setProjectButtonBusy(id, 'Stopping...');
+      try {
+        var data = await postProjectLifecycle(id, 'stop');
+        showProjectDetailStatus(id, 'Stopped', false);
+        await refreshProjectStatus(id, { reason: 'stop request', retry: true, fallbackStatus: 'stopped' });
+        if (opts.reload !== false && opts.reload === true) location.reload();
+        return { ok: true, data: data };
+      } catch (err) {
+        showProjectFeedback(id, 'Stop failed: ' + errorMessage(err), true);
+        refreshProjectStatus(id, { reason: 'stop failure', retry: true, fallbackStatus: 'running' });
+        return { ok: false, error: err };
+      }
+    };
+
+    window.restartProject = async function(id) {
+      clearProjectFeedback(id);
+      showProjectDetailStatus(id, 'Restarting...', false);
+      setProjectButtonBusy(id, 'Restarting...');
+      try {
+        var data = await postProjectLifecycle(id, 'restart');
+        if (data.status) {
+          reconcileProjectStatusSnapshot({ id: id, status: data.status, health: data.health });
+        }
+        subscribeProjectStartup(id);
+        refreshProjectStatus(id, { reason: 'restart request', retry: true, fallbackStatus: data.status || 'starting' });
+        return { ok: true, data: data };
+      } catch (err) {
+        showBuildLogFromResponse(id, err.responseData);
+        showProjectFeedback(id, 'Restart failed: ' + errorMessage(err), true);
+        refreshProjectStatus(id, { reason: 'restart failure', retry: true, fallbackStatus: 'running' });
+        return { ok: false, error: err };
+      }
+    };
 
     // Auto-refresh every 30 seconds (only when no project is expanded)
     setInterval(function() {
@@ -306,19 +578,9 @@
     <% for (const project of projects) { %>
       <% if (project.health === 'starting') { %>
     (function() {
-      var btn = document.getElementById('project-btn-<%= project.id %>');
-      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; _listSubscribeStartup('<%= project.id %>', btn); }
+      setProjectButtonBusy('<%= project.id %>', 'Starting...');
+      subscribeProjectStartup('<%= project.id %>');
     })();
-      <% } %>
-    <% } %>
-    <% for (const wts of Object.values(worktreesByParent)) { %>
-      <% for (const wt of wts) { %>
-        <% if (wt.health === 'starting') { %>
-    (function() {
-      var btn = document.getElementById('project-btn-<%= wt.id %>');
-      if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; _listSubscribeStartup('<%= wt.id %>', btn); }
-    })();
-        <% } %>
       <% } %>
     <% } %>
   </script>

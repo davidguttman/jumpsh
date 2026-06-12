@@ -64,15 +64,12 @@
 
 <div class="project-actions" style="display: flex; justify-content: space-between; align-items: center;">
   <button class="btn btn-danger-outline" onclick="deleteProject(<%= project.id %>)">Delete</button>
-  <div style="display: flex; gap: 0.5rem;">
+  <div style="display: flex; gap: 0.5rem; align-items: center;" data-project-detail-actions="<%= project.id %>">
+    <span class="project-detail-status hidden" id="project-detail-status-<%= project.id %>" role="status" aria-live="polite"></span>
     <% if (project.status === 'running') { %>
       <button class="btn" onclick="restartProject(<%= project.id %>)">Restart</button>
-      <button class="btn btn-danger" onclick="stopProject(<%= project.id %>)">Stop</button>
-    <% } else if (project.status === 'starting') { %>
-      <button class="btn btn-success" disabled aria-busy="true">Starting...</button>
-    <% } else { %>
-      <button class="btn btn-success" onclick="startProject(<%= project.id %>)">Start</button>
     <% } %>
+    <%- include('_action_btn', { id: project.id, status: project.status }) %>
   </div>
 </div>
 
@@ -184,29 +181,58 @@
     };
   }
 
+  function showDetailStatus(id, message, isError) {
+    var el = document.getElementById('project-detail-status-' + id);
+    if (!el) return;
+    el.textContent = message || '';
+    el.className = 'project-detail-status' + (isError ? ' error' : '');
+    if (!message) el.classList.add('hidden');
+  }
+
+  function detailErrorMessage(err) {
+    return (err && err.message) ? err.message : String(err || 'Unknown error');
+  }
+
   // --- Project actions (define once, shared across all detail instances) ---
   window.startProject = window.startProject || async function(id) {
+    showDetailStatus(id, 'Starting...', false);
     subscribeStartup(id);
-    var res = await fetch('/projects/' + id + '/start', { method: 'POST' });
-    if (!res.ok) {
-      try {
-        var data = await res.json();
+    try {
+      var res = await fetch('/projects/' + id + '/start', { method: 'POST' });
+      if (!res.ok) {
+        var data = {};
+        try { data = await res.json(); } catch (_) {}
         if (data.buildLog) showBuildLog(id, data.buildLog);
-      } catch (_) {}
+        showDetailStatus(id, 'Start failed: ' + (data.error || ('request failed (' + res.status + ')')), true);
+      }
+    } catch (err) {
+      showDetailStatus(id, 'Start failed: ' + detailErrorMessage(err), true);
     }
   };
 
   window.stopProject = window.stopProject || async function(id, opts) {
     opts = opts || {};
-    var res = await fetch('/projects/' + id + '/stop', { method: 'POST' });
-    if (res.ok) { if (opts.reload !== false) location.reload(); }
-    else alert('Error stopping project');
-    return res;
+    showDetailStatus(id, 'Stopping...', false);
+    try {
+      var res = await fetch('/projects/' + id + '/stop', { method: 'POST' });
+      if (res.ok) {
+        showDetailStatus(id, 'Stopped', false);
+        if (opts.reload !== false) location.reload();
+      } else {
+        showDetailStatus(id, 'Stop failed: request failed (' + res.status + ')', true);
+      }
+      return res;
+    } catch (err) {
+      showDetailStatus(id, 'Stop failed: ' + detailErrorMessage(err), true);
+      return { ok: false, error: err };
+    }
   };
 
   window.restartProject = window.restartProject || async function(id) {
+    showDetailStatus(id, 'Restarting...', false);
     var res = await window.stopProject(id, { reload: false });
     if (res.ok) setTimeout(function() { window.startProject(id); }, 1000);
+    else showDetailStatus(id, 'Restart failed while stopping', true);
   };
 
   window.deleteProject = window.deleteProject || async function(id) {
