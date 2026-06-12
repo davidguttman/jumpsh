@@ -24,6 +24,7 @@ import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
 import { encodeContextHost } from './lib/context-host.js';
 import { sortWorktreesByRecency } from './lib/worktree-recency.js';
+import { pruneWorktrees } from './lib/worktree-prune.js';
 import {
   autoStartDesiredProjects,
   restartProjectWithWorktrees,
@@ -656,6 +657,20 @@ app.get('/api/projects', async (req, res) => {
 
     res.json(projectsWithStatus);
   });
+});
+
+// API: Prune stale registered worktree records through the daemon-owned DB instance.
+app.post('/api/prune/worktrees', async (req, res) => {
+  try {
+    const result = await pruneWorktrees({
+      db,
+      apply: req.body?.apply === true,
+      getStatus: project => docker.getStatus(project),
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: 'PRUNE_WORKTREES_FAILED' });
+  }
 });
 
 // ============ Detect Project Type API ============

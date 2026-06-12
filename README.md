@@ -46,6 +46,7 @@ jump.sh uninstall          Remove daemon service (keeps ~/.jump.sh state)
 jump.sh upgrade            Upgrade jump.sh itself (keeps ~/.jump.sh state)
 jump.sh certs              Download TLS certificates
 jump.sh ls                 List projects with status
+jump.sh prune worktrees    Prune stale registered worktree records (dry-run by default)
 jump.sh start [name]       Start project containers
 jump.sh stop [name]        Stop project containers
 jump.sh restart [name]     Restart project containers
@@ -67,6 +68,8 @@ jump.sh stop my-app --json              # stop, JSON result
 jump.sh restart my-app --json           # restart, JSON result
 jump.sh add . --json                    # detection only (dry-run)
 jump.sh add . --json --yes              # create project + JSON result
+jump.sh prune worktrees --json          # preview stale worktree records
+jump.sh prune worktrees --json --yes    # prune stale worktree DB records
 ```
 
 When run inside a registered project's directory, `start`, `stop`, `restart`,
