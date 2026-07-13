@@ -743,6 +743,25 @@ main {
   letter-spacing: 1px;
 }
 
+.worktrees-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.worktrees-header h3 {
+  margin-bottom: 0;
+}
+
+.wt-sort-select {
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.4rem;
+}
+
 .worktrees-table {
   width: 100%;
   border-collapse: collapse;

@@ -303,7 +303,7 @@ app.get('/projects/:id/detail-partial', (req, res) => {
         const enrichedWts = await Promise.all(wts.map(async (wt) => {
           return enrichProjectStatus(docker, wt);
         }));
-        resolve(enrichedWts);
+        resolve(await sortWorktreesByRecency(enrichedWts));
       });
     });
 

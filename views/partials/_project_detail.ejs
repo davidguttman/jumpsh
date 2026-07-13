@@ -78,11 +78,19 @@
 <% } %>
 <% if (worktrees.length > 0) { %>
   <div class="worktrees-section">
-    <h3>Worktrees (<%= worktrees.length %>)</h3>
+    <div class="worktrees-header">
+      <h3>Worktrees (<%= worktrees.length %>)</h3>
+      <% if (worktrees.length > 1) { %>
+        <select class="input wt-sort-select" id="wt-sort-<%= project.id %>" aria-label="Sort worktrees">
+          <option value="recency">sort: recent</option>
+          <option value="name">sort: name</option>
+        </select>
+      <% } %>
+    </div>
     <table class="worktrees-table">
-      <tbody>
+      <tbody id="worktrees-tbody-<%= project.id %>">
         <% for (const wt of worktrees) { %>
-          <tr>
+          <tr data-wt-name="<%= wt.branch_name %>" data-wt-recency="<%= wt.recency_ms || 0 %>">
             <td>
               <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank">
                 <code><%= wt.branch_name %></code>
@@ -110,7 +118,7 @@
   <select class="logs-tab-select input" id="logs-tabs-<%= project.id %>">
     <option value="<%= project.id %>" data-log-id="<%= project.id %>" data-log-label="<%= project.name %>"><%= project.name %></option>
     <% for (const wt of worktrees) { %>
-      <option value="<%= wt.id %>" data-log-id="<%= wt.id %>" data-log-label="<%= wt.branch_name %>"><%= wt.branch_name %></option>
+      <option value="<%= wt.id %>" data-log-id="<%= wt.id %>" data-log-label="<%= wt.branch_name %>" data-wt-name="<%= wt.branch_name %>" data-wt-recency="<%= wt.recency_ms || 0 %>"><%= wt.branch_name %></option>
     <% } %>
   </select>
   <pre class="logs-output" id="logs-<%= project.id %>"><%= logs %></pre>
@@ -408,6 +416,50 @@
       showLogStatus('Connection lost \u2014 reload to reconnect', true);
     };
   }
+
+  // --- Worktree sort ---
+  (function initWorktreeSort() {
+    var sortEl = document.getElementById('wt-sort-' + pid);
+    if (!sortEl) return;
+
+    function reorderByWorktreeSort(parent, nodes, mode) {
+      var sorted = Array.prototype.slice.call(nodes);
+      sorted.sort(function(a, b) {
+        if (mode === 'name') return (a.dataset.wtName || '').localeCompare(b.dataset.wtName || '');
+        return Number(b.dataset.wtRecency || 0) - Number(a.dataset.wtRecency || 0);
+      });
+      sorted.forEach(function(node) { parent.appendChild(node); });
+    }
+
+    function applyWorktreeSort(mode) {
+      var tbody = document.getElementById('worktrees-tbody-' + pid);
+      if (tbody) reorderByWorktreeSort(tbody, tbody.querySelectorAll('tr[data-wt-name]'), mode);
+      var logSelect = document.getElementById('logs-tabs-' + pid);
+      if (logSelect) reorderByWorktreeSort(logSelect, logSelect.querySelectorAll('option[data-wt-name]'), mode);
+    }
+
+    // Storage can throw (e.g. SecurityError when blocked); sorting must
+    // survive without persistence so the rest of the script still runs
+    function readWtSort() {
+      try { return localStorage.getItem('jumpsh-wt-sort'); } catch (_) { return null; }
+    }
+
+    function saveWtSort(mode) {
+      try { localStorage.setItem('jumpsh-wt-sort', mode); } catch (_) {}
+    }
+
+    // Server renders recency order; restore a persisted name preference
+    var savedWtSort = readWtSort();
+    var wtSortMode = savedWtSort === 'name' ? 'name' : 'recency';
+    sortEl.value = wtSortMode;
+    if (wtSortMode !== 'recency') applyWorktreeSort(wtSortMode);
+
+    sortEl.addEventListener('change', function() {
+      var mode = this.value === 'name' ? 'name' : 'recency';
+      saveWtSort(mode);
+      applyWorktreeSort(mode);
+    });
+  })();
 
   // --- Init ---
   // Bind log source select

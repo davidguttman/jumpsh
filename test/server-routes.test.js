@@ -14,3 +14,15 @@ describe('server project creation route', () => {
     assert.doesNotMatch(createRoute, /docker\.start\(project\)/);
   });
 });
+
+describe('server project detail partial route', () => {
+  it('sorts detail worktrees by recency before rendering', () => {
+    const source = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+    const detailRoute = source.slice(
+      source.indexOf("app.get('/projects/:id/detail-partial'"),
+      source.indexOf('// Project detail — redirect')
+    );
+
+    assert.match(detailRoute, /resolve\(await sortWorktreesByRecency\(enrichedWts\)\)/);
+  });
+});

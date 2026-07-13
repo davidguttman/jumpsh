@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { sortWorktreesByRecency } from '../lib/worktree-recency.js';
+import { attachWorktreeRecency, sortWorktreesByRecency } from '../lib/worktree-recency.js';
 
 let tmpDir;
 
@@ -81,5 +81,34 @@ describe('worktree recency sorting', () => {
     ]);
 
     assert.deepEqual(sorted.map(wt => wt.branch_name), ['old', 'new']);
+  });
+
+  it('attaches a recency_ms field without mutating the input', async () => {
+    const { oldPath, newPath } = makeRepoWithWorktrees();
+    const input = [
+      { branch_name: 'old', path: oldPath },
+      { branch_name: 'new', path: newPath },
+    ];
+
+    const decorated = await attachWorktreeRecency(input);
+
+    assert.deepEqual(decorated.map(wt => wt.branch_name), ['old', 'new']);
+    for (const wt of decorated) {
+      assert.equal(typeof wt.recency_ms, 'number');
+      assert.ok(wt.recency_ms > 0);
+    }
+    assert.ok(decorated[1].recency_ms > decorated[0].recency_ms);
+    assert.equal('recency_ms' in input[0], false);
+  });
+
+  it('exposes recency_ms on sorted worktrees in descending order', async () => {
+    const { oldPath, newPath } = makeRepoWithWorktrees();
+
+    const sorted = await sortWorktreesByRecency([
+      { branch_name: 'old', path: oldPath },
+      { branch_name: 'new', path: newPath },
+    ]);
+
+    assert.ok(sorted[0].recency_ms >= sorted[1].recency_ms);
   });
 });
