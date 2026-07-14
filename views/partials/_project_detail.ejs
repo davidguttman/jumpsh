@@ -139,7 +139,7 @@
   // Per-project state registry (no global conflicts)
   var ns = window._pd = window._pd || {};
   if (ns[pid]) return; // already initialized
-  ns[pid] = { eventSource: null, activeLogId: null, buildLines: [] };
+  ns[pid] = { eventSource: null, activeLogId: null, buildLines: [], wtRecencyTimer: null };
   var state = ns[pid];
 
   // --- Build logs ---

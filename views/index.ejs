@@ -217,7 +217,7 @@
         },
 
         _cleanupDetail(name) {
-          // Close any EventSources from the detail partial
+          // Close any EventSources and timers from the detail partial
           var row = document.querySelector('[data-project-name="' + name + '"]');
           if (!row) return;
           var id = this._projectIds[name];
@@ -225,6 +225,10 @@
             if (window._pd[id].eventSource) {
               window._pd[id].eventSource.close();
               window._pd[id].eventSource = null;
+            }
+            if (window._pd[id].wtRecencyTimer) {
+              clearInterval(window._pd[id].wtRecencyTimer);
+              window._pd[id].wtRecencyTimer = null;
             }
             delete window._pd[id];
           }
