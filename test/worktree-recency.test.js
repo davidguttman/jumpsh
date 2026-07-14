@@ -101,6 +101,26 @@ describe('worktree recency sorting', () => {
     assert.equal('recency_ms' in input[0], false);
   });
 
+  it('attaches a human recency_label alongside recency_ms', async () => {
+    const { newPath } = makeRepoWithWorktrees();
+
+    const [decorated] = await attachWorktreeRecency([
+      { branch_name: 'new', path: newPath },
+    ]);
+
+    assert.equal(typeof decorated.recency_label, 'string');
+    assert.match(decorated.recency_label, /^(just now|\d+ \w+ ago)$/);
+  });
+
+  it('leaves recency_label empty when no timestamp source exists', async () => {
+    const [decorated] = await attachWorktreeRecency([
+      { branch_name: 'ghost' },
+    ]);
+
+    assert.equal(decorated.recency_ms, 0);
+    assert.equal(decorated.recency_label, '');
+  });
+
   it('exposes recency_ms on sorted worktrees in descending order', async () => {
     const { oldPath, newPath } = makeRepoWithWorktrees();
 

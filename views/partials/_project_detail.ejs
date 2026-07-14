@@ -95,6 +95,9 @@
               <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank">
                 <code><%= wt.branch_name %></code>
               </a>
+              <% if (wt.recency_label) { %>
+                <span class="wt-recency" title="<%= new Date(wt.recency_ms).toISOString() %>"><%= wt.recency_label %></span>
+              <% } %>
             </td>
             <td style="text-align: right;">
               <%- include('_action_btn', { id: wt.id, status: wt.status, btnClass: 'btn-sm' }) %>
