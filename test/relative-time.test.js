@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatRelativeTime } from '../lib/relative-time.js';
+import { formatRelativeTime, MAX_TIMESTAMP_MS } from '../lib/relative-time.js';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -16,6 +16,13 @@ describe('formatRelativeTime', () => {
     assert.equal(formatRelativeTime(undefined, NOW), '');
     assert.equal(formatRelativeTime(null, NOW), '');
     assert.equal(formatRelativeTime('2026-07-14', NOW), '');
+  });
+
+  it('returns an empty label for finite timestamps beyond the Date range', () => {
+    assert.equal(formatRelativeTime(Number.MAX_VALUE, NOW), '');
+    assert.equal(formatRelativeTime(MAX_TIMESTAMP_MS + 1, NOW), '');
+    // The boundary itself is still a valid Date (far future -> clock-skew rule)
+    assert.equal(formatRelativeTime(MAX_TIMESTAMP_MS, NOW), 'just now');
   });
 
   it('labels anything under a minute as just now', () => {

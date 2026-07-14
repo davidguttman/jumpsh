@@ -95,8 +95,12 @@
               <a href="<%= config.projectUrl(wt.subdomain) %>" target="_blank">
                 <code><%= wt.branch_name %></code>
               </a>
-              <% if (wt.recency_label) { %>
-                <span class="wt-recency" title="<%= new Date(wt.recency_ms).toISOString() %>"><%= wt.recency_label %></span>
+              <% // 8640000000000000 = max valid Date value; beyond it toISOString() throws
+                 const recencyIso = Number.isFinite(wt.recency_ms) && wt.recency_ms > 0 && wt.recency_ms <= 8640000000000000
+                   ? new Date(wt.recency_ms).toISOString()
+                   : null; %>
+              <% if (wt.recency_label && recencyIso) { %>
+                <span class="wt-recency" title="<%= recencyIso %>"><%= wt.recency_label %></span>
               <% } %>
             </td>
             <td style="text-align: right;">
@@ -419,6 +423,59 @@
       showLogStatus('Connection lost \u2014 reload to reconnect', true);
     };
   }
+
+  // --- Worktree recency labels ---
+  // Expanded details suppress the periodic page reload, so server-rendered
+  // labels go stale; recompute them from data-wt-recency on an interval.
+  // Keep the formatting rules in sync with lib/relative-time.js.
+  var WT_RECENCY_MAX_MS = 8640000000000000; // max valid Date value
+  var WT_RECENCY_UNITS = (function() {
+    var minute = 60 * 1000;
+    var hour = 60 * minute;
+    var day = 24 * hour;
+    return [
+      { ms: 365 * day, name: 'year' },
+      { ms: 30 * day, name: 'month' },
+      { ms: 7 * day, name: 'week' },
+      { ms: day, name: 'day' },
+      { ms: hour, name: 'hour' },
+      { ms: minute, name: 'minute' },
+    ];
+  })();
+
+  function formatWtRecencyLabel(recencyMs, nowMs) {
+    if (!isFinite(recencyMs) || recencyMs <= 0 || recencyMs > WT_RECENCY_MAX_MS) return '';
+    var elapsedMs = nowMs - recencyMs;
+    for (var i = 0; i < WT_RECENCY_UNITS.length; i++) {
+      var unit = WT_RECENCY_UNITS[i];
+      if (elapsedMs >= unit.ms) {
+        var count = Math.floor(elapsedMs / unit.ms);
+        return count + ' ' + unit.name + (count === 1 ? '' : 's') + ' ago';
+      }
+    }
+    return 'just now';
+  }
+
+  function refreshWtRecencyLabels(nowMs) {
+    var tbody = document.getElementById('worktrees-tbody-' + pid);
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr[data-wt-recency]');
+    for (var i = 0; i < rows.length; i++) {
+      var labelEl = rows[i].querySelector('.wt-recency');
+      if (!labelEl) continue;
+      var text = formatWtRecencyLabel(Number(rows[i].dataset.wtRecency), nowMs);
+      // Empty means the timestamp is unusable; keep the server-rendered text
+      if (text) labelEl.textContent = text;
+    }
+  }
+
+  (function initWtRecencyLabels() {
+    if (!document.getElementById('worktrees-tbody-' + pid)) return;
+    refreshWtRecencyLabels(Date.now());
+    state.wtRecencyTimer = setInterval(function() {
+      refreshWtRecencyLabels(Date.now());
+    }, 30000);
+  })();
 
   // --- Worktree sort ---
   (function initWorktreeSort() {

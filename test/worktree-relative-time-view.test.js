@@ -65,6 +65,27 @@ describe('worktree relative time labels', () => {
     assert.doesNotMatch(html, /class="wt-recency"/);
   });
 
+  it('omits label and title for out-of-Date-range recency values without throwing', async () => {
+    const html = await renderDetail([
+      { id: 11, branch_name: 'zeta', subdomain: 'app-zeta', status: 'running', recency_ms: Number.MAX_VALUE, recency_label: 'stale label' },
+      { id: 12, branch_name: 'alpha', subdomain: 'app-alpha', status: 'stopped', recency_ms: 8640000000000001, recency_label: 'stale label' },
+    ]);
+    assert.doesNotMatch(html, /class="wt-recency"/);
+    assert.doesNotMatch(html, /stale label/);
+  });
+
+  it('omits label and title for missing, non-finite, and non-positive recency values without throwing', async () => {
+    const html = await renderDetail([
+      { id: 11, branch_name: 'zeta', subdomain: 'app-zeta', status: 'running', recency_label: 'stale label' },
+      { id: 12, branch_name: 'alpha', subdomain: 'app-alpha', status: 'stopped', recency_ms: NaN, recency_label: 'stale label' },
+      { id: 13, branch_name: 'mid', subdomain: 'app-mid', status: 'stopped', recency_ms: Infinity, recency_label: 'stale label' },
+      { id: 14, branch_name: 'neg', subdomain: 'app-neg', status: 'stopped', recency_ms: -5, recency_label: 'stale label' },
+      { id: 15, branch_name: 'zero', subdomain: 'app-zero', status: 'stopped', recency_ms: 0, recency_label: 'stale label' },
+    ]);
+    assert.doesNotMatch(html, /class="wt-recency"/);
+    assert.doesNotMatch(html, /stale label/);
+  });
+
   it('escapes label content', async () => {
     const html = await renderDetail([
       { id: 11, branch_name: 'zeta', subdomain: 'app-zeta', status: 'running', recency_ms: 1000, recency_label: '<img src=x>' },
