@@ -1,5 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'fs';
 import path from 'path';
 import { generateCompose, getJumpshDir } from '../services/ComposeGenerator.js';
@@ -7,6 +8,54 @@ import { makeTmpDir, writeJson, writeFile, cleanTmpDir } from './helpers/fixture
 
 // Override HOME so getJumpshDir writes into tmpdir instead of real ~/.jump.sh
 let tmpHome, originalHome, projectDir;
+
+function hasDockerCompose() {
+  try {
+    execFileSync('docker', ['compose', 'version'], { stdio: 'ignore' });
+    execFileSync('docker', ['info'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const dockerComposeAvailable = hasDockerCompose();
+
+function readComposeConfig(composePath, projectName) {
+  const output = execFileSync(
+    'docker',
+    [
+      'compose',
+      '--project-name', projectName,
+      '-f', composePath,
+      'config',
+      '--format', 'json',
+      '--no-env-resolution',
+    ],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, FOO: 'expanded-foo', BAR: 'expanded-bar' },
+    },
+  );
+  return JSON.parse(output);
+}
+
+function runCompose(composePath, projectName, args) {
+  return execFileSync(
+    'docker',
+    ['compose', '--project-name', projectName, '-f', composePath, ...args],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, FOO: 'expanded-foo', BAR: 'expanded-bar' },
+    },
+  );
+}
+
+function cleanCompose(composePath, projectName) {
+  try {
+    runCompose(composePath, projectName, ['down', '--volumes', '--remove-orphans', '--rmi', 'local']);
+  } catch { /* best effort cleanup after an assertion/runtime failure */ }
+}
 
 beforeEach(() => {
   originalHome = process.env.HOME;
@@ -58,6 +107,169 @@ describe('generateCompose skip behaviour', () => {
   });
 });
 
+describe('generateCompose dynamic service user', () => {
+  it('runs as the numeric owner of the bind-mounted project checkout', () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const { uid, gid } = fs.statSync(projectDir);
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+
+    const result = generateCompose(projectDir, 'test-user', detection, 10000, { force: true });
+    const compose = fs.readFileSync(result.composePath, 'utf8');
+
+    assert.ok(compose.includes(`    user: "${uid}:${gid}"`));
+    assert.ok(compose.includes('      - HOME=/tmp'));
+  });
+
+  it('fails clearly when the project owner cannot be read', () => {
+    const missingProjectDir = path.join(tmpHome, 'missing-project');
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+
+    assert.throws(
+      () => generateCompose(missingProjectDir, 'test-user-stat-error', detection, 10000, { force: true }),
+      /Unable to read owner identity.*test-user-stat-error|Unable to read owner identity.*project/,
+    );
+  });
+
+  it('fails clearly when the project owner identity is invalid', () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const statSync = fs.statSync;
+    fs.statSync = (target, options) => {
+      const stats = statSync(target, options);
+      return target === projectDir ? { ...stats, uid: Number.NaN } : stats;
+    };
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+
+    try {
+      assert.throws(
+        () => generateCompose(projectDir, 'test-user-invalid', detection, 10000, { force: true }),
+        /Invalid owner identity.*project/,
+      );
+    } finally {
+      fs.statSync = statSync;
+    }
+  });
+});
+
+describe('generateCompose Compose interpolation escaping', () => {
+  it('rejects dollar signs in dynamic project paths before writing generated files', () => {
+    const dollarProjectDir = path.join(tmpHome, 'project-$FOO-${BAR}');
+    fs.mkdirSync(dollarProjectDir, { recursive: true });
+    writeJson(dollarProjectDir, 'package.json', { dependencies: {} });
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'node index.js',
+      port: 3000,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: null },
+    };
+
+    assert.throws(
+      () => generateCompose(dollarProjectDir, 'test-dollar-project', detection, 10000, { force: true }),
+      /cannot build.*project path.*literal "\$".*build\/bake/i,
+    );
+    assert.ok(!fs.existsSync(getJumpshDir('test-dollar-project')));
+    assert.ok(!fs.existsSync(path.join(dollarProjectDir, '.dockerignore')));
+  });
+
+  it('rejects dollar signs in dynamic slug/config paths before writing generated files', () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'node index.js',
+      port: 3000,
+      packageManager: { name: 'npm', install: 'npm install', lockFile: null },
+    };
+    const slug = 'test-$FOO-${BAR}';
+
+    assert.throws(
+      () => generateCompose(projectDir, slug, detection, 10000, { force: true }),
+      /cannot build.*jump\.sh config path.*literal "\$".*build\/bake/i,
+    );
+    assert.ok(!fs.existsSync(getJumpshDir(slug)));
+    assert.ok(!fs.existsSync(path.join(projectDir, '.dockerignore')));
+  });
+
+  it('preserves literal dollar signs in a static bind mount at real Compose runtime', { skip: !dockerComposeAvailable }, () => {
+    const staticProjectDir = path.join(tmpHome, 'static-$FOO-${BAR}');
+    fs.mkdirSync(staticProjectDir);
+    writeFile(staticProjectDir, 'marker.txt', 'mounted-literal-dollar-path\n');
+    const detection = { type: 'static', framework: null, devCommand: null, port: 80, dockerImage: 'nginx:alpine' };
+
+    const result = generateCompose(staticProjectDir, 'test-static-$FOO-${BAR}', detection, 10000, { force: true });
+    const projectName = `jump-sh-static-dollar-${process.pid}`;
+
+    try {
+      const config = readComposeConfig(result.composePath, projectName);
+      assert.equal(config.services.app.volumes[0].source, staticProjectDir.replaceAll('$', () => '$$'));
+      assert.ok(!JSON.stringify(config).includes('expanded-foo'));
+      assert.ok(!JSON.stringify(config).includes('expanded-bar'));
+
+      const output = runCompose(result.composePath, projectName, [
+        'run', '--rm', '--entrypoint', 'cat', 'app', '/usr/share/nginx/html/marker.txt',
+      ]);
+      assert.equal(output.trim(), 'mounted-literal-dollar-path');
+    } finally {
+      cleanCompose(result.composePath, projectName);
+    }
+  });
+
+  it('preserves literal dollars in override environment and command values at real Compose runtime', { skip: !dockerComposeAvailable }, () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    writeFile(projectDir, 'probe.sh', [
+      '#!/bin/sh',
+      'set -eu',
+      'printf "ENV=<%s> HOME=<%s> ARG=<%s>\\n" "$LITERAL_VALUE" "$HOME" "$1" > /app/runtime-result.txt',
+      '',
+    ].join('\n'));
+    const literalEnvValue = 'prefix-$FOO-${BAR}';
+    const literalHome = '/home/$FOO/${BAR}';
+    const literalCommandArg = 'arg-$FOO-${BAR}';
+    const literalCommand = `sh /app/probe.sh '${literalCommandArg}'`;
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: literalCommand,
+      port: 3000,
+      packageManager: { name: 'bun', install: 'true', lockFile: null },
+      overrideEnv: JSON.stringify([
+        { key: 'LITERAL_VALUE', value: literalEnvValue },
+        { key: 'HOME', value: literalHome },
+      ]),
+    };
+    const result = generateCompose(projectDir, 'test-runtime-dollar-values', detection, 0, { force: true });
+    fs.writeFileSync(result.dockerfilePath, [
+      'FROM alpine:3.22',
+      'RUN mkdir -p /app/node_modules',
+      'WORKDIR /app',
+      'COPY probe.sh /app/probe.sh',
+      '',
+    ].join('\n'));
+    const projectName = `jump-sh-runtime-dollar-${process.pid}`;
+
+    try {
+      const config = readComposeConfig(result.composePath, projectName);
+      assert.equal(config.services.app.environment.LITERAL_VALUE, literalEnvValue.replaceAll('$', () => '$$'));
+      assert.equal(config.services.app.environment.HOME, literalHome.replaceAll('$', () => '$$'));
+      assert.deepEqual(config.services.app.command, [
+        'sh',
+        '/app/probe.sh',
+        literalCommandArg.replaceAll('$', () => '$$'),
+      ]);
+      assert.ok(!JSON.stringify(config).includes('expanded-foo'));
+      assert.ok(!JSON.stringify(config).includes('expanded-bar'));
+
+      runCompose(result.composePath, projectName, ['run', '--rm', '--build', 'app']);
+      assert.equal(
+        fs.readFileSync(path.join(projectDir, 'runtime-result.txt'), 'utf8').trim(),
+        `ENV=<${literalEnvValue}> HOME=<${literalHome}> ARG=<${literalCommandArg}>`,
+      );
+    } finally {
+      cleanCompose(result.composePath, projectName);
+    }
+  });
+});
+
 describe('generateCompose Node projects', () => {
   it('generates Dockerfile with node:20-slim', () => {
     writeJson(projectDir, 'package.json', { dependencies: {} });
@@ -92,12 +304,32 @@ describe('generateCompose Node projects', () => {
     assert.ok(compose.includes('HOST=0.0.0.0'));
   });
 
-  it('includes anonymous node_modules volume', () => {
+  it('initializes a named node_modules volume for the mapped app user', () => {
     writeJson(projectDir, 'package.json', { dependencies: {} });
+    const { uid, gid } = fs.statSync(projectDir);
     const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
     const result = generateCompose(projectDir, 'test-vol', detection, 10000, { force: true });
     const compose = fs.readFileSync(result.composePath, 'utf8');
-    assert.ok(compose.includes('/app/node_modules'));
+
+    assert.ok(compose.includes('      - app_node_modules:/app/node_modules'));
+    assert.ok(compose.includes('    depends_on:\n      app_node_modules_init:\n        condition: service_completed_successfully'));
+    assert.ok(compose.includes('  app_node_modules_init:\n    user: "0:0"'));
+    assert.ok(compose.includes('    entrypoint: []'));
+    assert.ok(compose.includes('      - app_node_modules:/deps'));
+    assert.ok(compose.includes(`    command: ["sh","-c","set -eu; find /deps -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; if [ -d /app/node_modules ]; then cp -a /app/node_modules/. /deps/; fi; chown -R ${uid}:${gid} /deps"]`));
+    assert.ok(compose.endsWith('volumes:\n  app_node_modules:\n'));
+
+    const initService = compose.slice(compose.lastIndexOf('\n  app_node_modules_init:'));
+    assert.ok(initService.includes(`      context: ${JSON.stringify(projectDir)}`));
+    assert.ok(initService.includes(`      dockerfile: ${JSON.stringify(path.join(getJumpshDir('test-vol'), 'Dockerfile'))}`));
+    assert.ok(!initService.includes(`${projectDir}:/app`));
+    assert.ok(!initService.includes('app_node_modules:/app/node_modules'));
+    assert.ok(!initService.includes('ports:'));
+    assert.ok(!initService.includes('restart:'));
+    assert.ok(!initService.includes('logging:'));
+    assert.ok(!initService.includes('extra_hosts:'));
+    assert.ok(!initService.includes('environment:'));
+    assert.ok(!initService.includes('env_file:'));
   });
 
   it('includes extra_hosts for host.docker.internal', () => {
@@ -107,6 +339,88 @@ describe('generateCompose Node projects', () => {
     const compose = fs.readFileSync(result.composePath, 'utf8');
     assert.ok(compose.includes('host.docker.internal:host-gateway'));
   });
+
+  it('starts when an empty-dependencies build has no /app/node_modules directory', { skip: !dockerComposeAvailable }, () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    writeFile(projectDir, 'probe.sh', '#!/bin/sh\nset -eu\nprintf "node-init-ok" > /app/runtime-result.txt\n');
+    const detection = {
+      type: 'node',
+      framework: null,
+      devCommand: 'sh /app/probe.sh',
+      port: 3000,
+      packageManager: { name: 'bun', install: 'true', lockFile: null },
+    };
+    const result = generateCompose(projectDir, 'test-node-empty-deps', detection, 0, { force: true });
+    fs.writeFileSync(result.dockerfilePath, [
+      'FROM alpine:3.22',
+      'WORKDIR /app',
+      'COPY probe.sh /app/probe.sh',
+      '',
+    ].join('\n'));
+    const projectName = `jump-sh-node-empty-deps-${process.pid}`;
+
+    try {
+      runCompose(result.composePath, projectName, ['run', '--rm', '--build', 'app']);
+      assert.equal(fs.readFileSync(path.join(projectDir, 'runtime-result.txt'), 'utf8'), 'node-init-ok');
+    } finally {
+      cleanCompose(result.composePath, projectName);
+    }
+  });
+});
+
+describe('generateCompose PHP projects', () => {
+  it('initializes a named vendor volume for the mapped app user', () => {
+    const { uid, gid } = fs.statSync(projectDir);
+    const detection = { type: 'php', framework: null, devCommand: 'php -S 0.0.0.0:8000', port: 8000, installCommand: 'composer install' };
+    const result = generateCompose(projectDir, 'test-php-vol', detection, 10000, { force: true });
+    const compose = fs.readFileSync(result.composePath, 'utf8');
+
+    assert.ok(compose.includes(`    user: "${uid}:${gid}"`));
+    assert.ok(compose.includes('      - HOME=/tmp'));
+    assert.ok(compose.includes('      - app_vendor:/app/vendor'));
+    assert.ok(compose.includes('    depends_on:\n      app_vendor_init:\n        condition: service_completed_successfully'));
+    assert.ok(compose.includes('  app_vendor_init:\n    user: "0:0"'));
+    assert.ok(compose.includes('    entrypoint: []'));
+    assert.ok(compose.includes('      - app_vendor:/deps'));
+    assert.ok(compose.includes(`    command: ["sh","-c","set -eu; find /deps -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; if [ -d /app/vendor ]; then cp -a /app/vendor/. /deps/; fi; chown -R ${uid}:${gid} /deps"]`));
+    assert.ok(compose.endsWith('volumes:\n  app_vendor:\n'));
+
+    const initService = compose.slice(compose.lastIndexOf('\n  app_vendor_init:'));
+    assert.ok(!initService.includes('app_vendor:/app/vendor'));
+    assert.ok(!initService.includes('/app/node_modules/.'));
+  });
+
+  it('starts when the built image has no /app/vendor directory', { skip: !dockerComposeAvailable }, () => {
+    writeFile(projectDir, 'probe.php', '<?php file_put_contents("/app/runtime-result.txt", "php-init-ok");\n');
+    const detection = { type: 'php', framework: null, devCommand: 'php /app/probe.php', port: 8000 };
+    const result = generateCompose(projectDir, 'test-php-no-vendor', detection, 0, { force: true });
+    const projectName = `jump-sh-php-no-vendor-${process.pid}`;
+
+    try {
+      runCompose(result.composePath, projectName, ['run', '--rm', '--build', 'app']);
+      assert.equal(fs.readFileSync(path.join(projectDir, 'runtime-result.txt'), 'utf8'), 'php-init-ok');
+    } finally {
+      cleanCompose(result.composePath, projectName);
+    }
+  });
+});
+
+describe('generateCompose dependency initialization scope', () => {
+  for (const detection of [
+    { type: 'python', framework: null, devCommand: 'python app.py', port: 8000, installCommand: 'pip install -r requirements.txt' },
+    { type: 'go', framework: null, devCommand: 'go run .', port: 8080 },
+    { type: 'ruby', framework: null, devCommand: 'bundle exec ruby app.rb', port: 4567, installCommand: 'bundle install' },
+  ]) {
+    it(`does not add a dependency init service or named volume for ${detection.type}`, () => {
+      const result = generateCompose(projectDir, `test-no-init-${detection.type}`, detection, 10000, { force: true });
+      const compose = fs.readFileSync(result.composePath, 'utf8');
+
+      assert.ok(compose.includes('      - HOME=/tmp'));
+      assert.ok(!compose.includes('depends_on:'));
+      assert.ok(!compose.includes('_init:'));
+      assert.ok(!compose.includes('\nvolumes:\n'));
+    });
+  }
 });
 
 describe('generateCompose Node workspaces', () => {
@@ -253,6 +567,10 @@ describe('generateCompose static sites', () => {
     const compose = fs.readFileSync(result.composePath, 'utf8');
     assert.ok(compose.includes('nginx:alpine'));
     assert.ok(compose.includes('/usr/share/nginx/html:ro'));
+    assert.ok(!compose.includes('\n    user:'));
+    assert.ok(!compose.includes('depends_on:'));
+    assert.ok(!compose.includes('_init:'));
+    assert.ok(!compose.includes('\nvolumes:\n'));
     // Static sites should not generate a Dockerfile
     assert.ok(!fs.existsSync(result.dockerfilePath) || fs.readFileSync(result.dockerfilePath, 'utf8') === 'existing' || true);
   });
@@ -305,6 +623,20 @@ describe('generateCompose overrides', () => {
     });
     const compose = fs.readFileSync(result.composePath, 'utf8');
     assert.ok(compose.includes('MY_VAR=hello'));
+  });
+
+  it('preserves an explicit HOME override instead of adding the generated default', () => {
+    writeJson(projectDir, 'package.json', { dependencies: {} });
+    const detection = { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } };
+    const envJson = JSON.stringify([{ key: 'HOME', value: '/custom-home' }]);
+    const result = generateCompose(projectDir, 'test-home-override', detection, 10000, {
+      force: true,
+      overrides: { env: envJson },
+    });
+    const compose = fs.readFileSync(result.composePath, 'utf8');
+
+    assert.ok(compose.includes('      - "HOME=/custom-home"'));
+    assert.ok(!compose.includes('      - HOME=/tmp'));
   });
 });
 
