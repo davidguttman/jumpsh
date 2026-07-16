@@ -95,7 +95,12 @@ describe('upgrade planning and safety', async () => {
     return { prefix, packageRoot, nodePath, npmCliPath, jumpBinPath };
   }
 
-  function createRuntimeToolchain({ standardNpmLayout = true, npmTarget } = {}) {
+  function writeNpmWrapper(npmPath, content = '#!/bin/sh\nexit 0\n') {
+    fs.mkdirSync(path.dirname(npmPath), { recursive: true });
+    fs.writeFileSync(npmPath, content, { mode: 0o755 });
+  }
+
+  function createRuntimeToolchain({ standardNpmLayout = true, npmTarget, npmWrapper = false } = {}) {
     const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-runtime-prefix-'));
     const nodePath = path.join(prefix, 'bin', 'node');
     const npmCliPath = standardNpmLayout
@@ -104,7 +109,9 @@ describe('upgrade planning and safety', async () => {
     const npmPath = path.join(prefix, 'bin', 'npm');
 
     writeNodeWrapper(nodePath);
-    if (npmTarget) {
+    if (npmWrapper) {
+      writeNpmWrapper(npmPath);
+    } else if (npmTarget) {
       fs.mkdirSync(path.dirname(npmPath), { recursive: true });
       fs.symlinkSync(npmTarget, npmPath);
     } else {
@@ -113,6 +120,14 @@ describe('upgrade planning and safety', async () => {
     }
 
     return { prefix, nodePath, npmCliPath, npmPath };
+  }
+
+  function executePlanSafely(plan, options = {}) {
+    return executeUpgradePlan(plan, {
+      executeCommand: () => assert.fail('unexpected unstubbed upgrade command'),
+      removeDaemon: () => assert.fail('unexpected unstubbed daemon removal'),
+      ...options,
+    });
   }
 
   it('plans npx upgrades through the latest installer trampoline', () => {
@@ -190,7 +205,10 @@ describe('upgrade planning and safety', async () => {
 
       assert.equal(plan.toolchain.prefix, layout.prefix);
       assert.equal(plan.toolchain.nodePath, runtime.nodePath);
-      assert.equal(plan.toolchain.npmCliPath, runtime.npmCliPath);
+      assert.deepEqual(plan.toolchain.npm, {
+        command: runtime.nodePath,
+        argsPrefix: [runtime.npmCliPath],
+      });
       assert.equal(npmExecuted, false);
       assert.deepEqual(plan.commands[0], {
         command: runtime.nodePath,
@@ -223,7 +241,10 @@ describe('upgrade planning and safety', async () => {
         env: { PATH: hostileDir, npm_execpath: hostileExecPath },
       });
 
-      assert.equal(toolchain.npmCliPath, runtime.npmCliPath);
+      assert.deepEqual(toolchain.npm, {
+        command: runtime.nodePath,
+        argsPrefix: [runtime.npmCliPath],
+      });
       assert.equal(fs.existsSync(marker), false);
     } finally {
       fs.rmSync(layout.prefix, { recursive: true, force: true });
@@ -232,8 +253,11 @@ describe('upgrade planning and safety', async () => {
     }
   });
 
-  it('prefers a complete co-located mise-style pair over a different complete current runtime', () => {
-    const layout = createGlobalInstallLayout();
+  it('prefers a co-located mise-style Node and shell npm wrapper over a different runtime', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    writeNodeWrapper(layout.nodePath);
+    const targetNpmPath = path.join(layout.prefix, 'bin', 'npm');
+    writeNpmWrapper(targetNpmPath);
     const runtime = createRuntimeToolchain();
     try {
       const toolchain = resolveGlobalToolchain({
@@ -242,7 +266,10 @@ describe('upgrade planning and safety', async () => {
       });
 
       assert.equal(toolchain.nodePath, layout.nodePath);
-      assert.equal(toolchain.npmCliPath, layout.npmCliPath);
+      assert.deepEqual(toolchain.npm, {
+        command: targetNpmPath,
+        argsPrefix: [],
+      });
     } finally {
       fs.rmSync(layout.prefix, { recursive: true, force: true });
       fs.rmSync(runtime.prefix, { recursive: true, force: true });
@@ -259,7 +286,53 @@ describe('upgrade planning and safety', async () => {
       });
 
       assert.equal(toolchain.nodePath, runtime.nodePath);
-      assert.equal(toolchain.npmCliPath, runtime.npmCliPath);
+      assert.deepEqual(toolchain.npm, {
+        command: runtime.nodePath,
+        argsPrefix: [runtime.npmCliPath],
+      });
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('invokes a same-bin shell npm wrapper directly instead of feeding it to Node', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    const runtime = createRuntimeToolchain({ standardNpmLayout: false, npmWrapper: true });
+    try {
+      const plan = createUpgradePlan({
+        installMode: 'global',
+        packageRoot: layout.packageRoot,
+        execPath: runtime.nodePath,
+      });
+
+      assert.deepEqual(plan.toolchain.npm, {
+        command: runtime.npmPath,
+        argsPrefix: [],
+      });
+      assert.deepEqual(plan.commands[0], {
+        command: runtime.npmPath,
+        args: ['install', '-g', 'jump.sh@latest', '--prefix', layout.prefix],
+      });
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('invokes an in-prefix same-bin JS symlink through its absolute Node', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    const runtime = createRuntimeToolchain({ standardNpmLayout: false });
+    try {
+      const toolchain = resolveGlobalToolchain({
+        packageRoot: layout.packageRoot,
+        execPath: runtime.nodePath,
+      });
+
+      assert.deepEqual(toolchain.npm, {
+        command: runtime.nodePath,
+        argsPrefix: [runtime.npmCliPath],
+      });
     } finally {
       fs.rmSync(layout.prefix, { recursive: true, force: true });
       fs.rmSync(runtime.prefix, { recursive: true, force: true });
@@ -301,7 +374,7 @@ describe('upgrade planning and safety', async () => {
             packageRoot: layout.packageRoot,
             execPath: runtime.nodePath,
           });
-          executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+          executePlanSafely(plan, { removeDaemon: () => { removed = true; } });
         },
         /no trusted Node\/npm pair/i,
       );
@@ -320,7 +393,7 @@ describe('upgrade planning and safety', async () => {
       assert.throws(
         () => {
           const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
-          executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+          executePlanSafely(plan, { removeDaemon: () => { removed = true; } });
         },
         /jump\.sh bin.*not found/i,
       );
@@ -358,7 +431,7 @@ describe('upgrade planning and safety', async () => {
             packageRoot: layout.packageRoot,
             fileSystem,
           });
-          executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+          executePlanSafely(plan, { removeDaemon: () => { removed = true; } });
         },
         /global install target.*not writable/i,
       );
@@ -374,7 +447,7 @@ describe('upgrade planning and safety', async () => {
     try {
       const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
       assert.throws(
-        () => executeUpgradePlan(plan, {
+        () => executePlanSafely(plan, {
           cwd: layout.prefix,
           executeCommand: (step) => {
             events.push(step);
@@ -395,7 +468,7 @@ describe('upgrade planning and safety', async () => {
     const events = [];
     try {
       const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
-      executeUpgradePlan(plan, {
+      executePlanSafely(plan, {
         cwd: layout.prefix,
         executeCommand: (step) => events.push(step),
         removeDaemon: () => {
@@ -404,6 +477,96 @@ describe('upgrade planning and safety', async () => {
         },
       });
       assert.deepEqual(events, [plan.commands[0], 'remove', plan.commands[1]]);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a jump bin symlink whose canonical target escapes the package root', () => {
+    const layout = createGlobalInstallLayout();
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-outside-bin-'));
+    const outsideBin = path.join(outsideDir, 'jumpsh.js');
+    fs.writeFileSync(outsideBin, '');
+    fs.rmSync(layout.jumpBinPath);
+    fs.symlinkSync(outsideBin, layout.jumpBinPath);
+
+    try {
+      assert.throws(
+        () => createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot }),
+        /jump\.sh bin.*outside.*package root/i,
+      );
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('refreshes a replaced in-package jump bin before daemon removal and service install', () => {
+    const layout = createGlobalInstallLayout();
+    const firstBin = path.join(layout.packageRoot, 'dist', 'first.js');
+    const secondBin = path.join(layout.packageRoot, 'dist', 'second.js');
+    fs.mkdirSync(path.dirname(firstBin), { recursive: true });
+    fs.writeFileSync(firstBin, '');
+    fs.writeFileSync(secondBin, '');
+    fs.rmSync(layout.jumpBinPath);
+    fs.symlinkSync(path.relative(path.dirname(layout.jumpBinPath), firstBin), layout.jumpBinPath);
+    const events = [];
+
+    try {
+      const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
+      assert.equal(plan.toolchain.jumpBinPath, firstBin);
+
+      executePlanSafely(plan, {
+        executeCommand: (step) => {
+          events.push(step);
+          if (events.length === 1) {
+            fs.rmSync(layout.jumpBinPath);
+            fs.symlinkSync(path.relative(path.dirname(layout.jumpBinPath), secondBin), layout.jumpBinPath);
+          }
+        },
+        removeDaemon: () => events.push('remove'),
+      });
+
+      assert.equal(plan.toolchain.jumpBinPath, secondBin);
+      assert.deepEqual(events, [
+        plan.commands[0],
+        'remove',
+        { command: layout.nodePath, args: [secondBin, 'install'] },
+      ]);
+
+      const versionCalls = [];
+      assert.equal(readInstalledVersion('global', {
+        toolchain: plan.toolchain,
+        cwd: layout.prefix,
+        execFileSync: (command, args) => {
+          versionCalls.push({ command, args });
+          return 'jump.sh 2.0.0\n';
+        },
+      }), '2.0.0');
+      assert.deepEqual(versionCalls, [
+        { command: layout.nodePath, args: [secondBin, '--version'] },
+      ]);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves the daemon untouched when the installed package bin is missing after npm succeeds', () => {
+    const layout = createGlobalInstallLayout();
+    const events = [];
+    try {
+      const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
+      assert.throws(
+        () => executePlanSafely(plan, {
+          executeCommand: (step) => {
+            events.push(step);
+            fs.rmSync(layout.jumpBinPath);
+          },
+          removeDaemon: () => events.push('remove'),
+        }),
+        /jump\.sh bin.*not found or accessible/i,
+      );
+      assert.deepEqual(events, [plan.commands[0]]);
     } finally {
       fs.rmSync(layout.prefix, { recursive: true, force: true });
     }
