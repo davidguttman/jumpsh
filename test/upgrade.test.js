@@ -56,22 +56,51 @@ describe('upgrade planning and safety', async () => {
     resolveSafeUpgradeCwd,
   } = await import('../lib/commands/upgrade.js');
 
-  function createGlobalInstallLayout() {
+  function writeNodeWrapper(nodePath) {
+    fs.mkdirSync(path.dirname(nodePath), { recursive: true });
+    fs.writeFileSync(nodePath, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "$@"\n`);
+    fs.chmodSync(nodePath, 0o755);
+  }
+
+  function writeNpmCli(npmCliPath, reportedPrefix) {
+    fs.mkdirSync(path.dirname(npmCliPath), { recursive: true });
+    fs.writeFileSync(
+      npmCliPath,
+      `if (process.argv.slice(2).join(' ') === 'prefix -g') process.stdout.write(${JSON.stringify(reportedPrefix)});\n`,
+    );
+    fs.chmodSync(npmCliPath, 0o755);
+  }
+
+  function createGlobalInstallLayout({ withToolchain = true } = {}) {
     const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-global-prefix-'));
     const packageRoot = path.join(prefix, 'lib', 'node_modules', 'jump.sh');
     const nodePath = path.join(prefix, 'bin', 'node');
     const npmCliPath = path.join(prefix, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
     const jumpBinPath = path.join(packageRoot, 'bin', 'jumpsh.js');
 
-    fs.mkdirSync(path.dirname(nodePath), { recursive: true });
-    fs.mkdirSync(path.dirname(npmCliPath), { recursive: true });
     fs.mkdirSync(path.dirname(jumpBinPath), { recursive: true });
-    fs.writeFileSync(nodePath, '');
-    fs.writeFileSync(npmCliPath, '');
     fs.writeFileSync(jumpBinPath, '');
-    fs.chmodSync(nodePath, 0o755);
+    if (withToolchain) {
+      writeNodeWrapper(nodePath);
+      writeNpmCli(npmCliPath, prefix);
+    }
 
     return { prefix, packageRoot, nodePath, npmCliPath, jumpBinPath };
+  }
+
+  function createRuntimeToolchain(reportedPrefix, { standardNpmLayout = true } = {}) {
+    const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-runtime-prefix-'));
+    const nodePath = path.join(prefix, 'bin', 'node');
+    const npmCliPath = standardNpmLayout
+      ? path.join(prefix, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+      : path.join(prefix, 'lib', 'custom-npm', 'npm-cli.js');
+    const npmPath = path.join(prefix, 'bin', 'npm');
+
+    writeNodeWrapper(nodePath);
+    writeNpmCli(npmCliPath, reportedPrefix);
+    fs.symlinkSync(path.relative(path.dirname(npmPath), npmCliPath), npmPath);
+
+    return { prefix, nodePath, npmCliPath, npmPath };
   }
 
   it('plans npx upgrades through the latest installer trampoline', () => {
@@ -107,10 +136,101 @@ describe('upgrade planning and safety', async () => {
     }
   });
 
+  it('supports a package prefix split from its runtime Node/npm installation', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    const runtime = createRuntimeToolchain(layout.prefix);
+    try {
+      const plan = createUpgradePlan({
+        installMode: 'global',
+        packageRoot: layout.packageRoot,
+        execPath: runtime.nodePath,
+        env: { PATH: runtime.prefix, npm_execpath: runtime.npmCliPath },
+      });
+
+      assert.equal(plan.toolchain.prefix, layout.prefix);
+      assert.equal(plan.toolchain.nodePath, runtime.nodePath);
+      assert.equal(plan.toolchain.npmCliPath, runtime.npmCliPath);
+      assert.deepEqual(plan.commands[0], {
+        command: runtime.nodePath,
+        args: [runtime.npmCliPath, 'install', '-g', 'jump.sh@latest', '--prefix', layout.prefix],
+      });
+      assert.deepEqual(plan.commands[1], {
+        command: runtime.nodePath,
+        args: [layout.jumpBinPath, 'install'],
+      });
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a PATH npm executable whose global prefix does not own jump.sh', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    const runtime = createRuntimeToolchain('/different/global/prefix', { standardNpmLayout: false });
+    try {
+      assert.throws(
+        () => resolveGlobalToolchain({
+          packageRoot: layout.packageRoot,
+          execPath: runtime.nodePath,
+          env: { PATH: path.dirname(runtime.npmPath) },
+        }),
+        /no accessible Node\/npm toolchain reports target global prefix.*reported \/different\/global\/prefix/i,
+      );
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers a matching co-located toolchain when runtime and PATH npm report the wrong prefix', () => {
+    const layout = createGlobalInstallLayout();
+    const runtime = createRuntimeToolchain('/wrong/system/prefix', { standardNpmLayout: false });
+    try {
+      const toolchain = resolveGlobalToolchain({
+        packageRoot: layout.packageRoot,
+        execPath: runtime.nodePath,
+        env: {
+          PATH: path.dirname(runtime.npmPath),
+          npm_execpath: runtime.npmCliPath,
+        },
+      });
+
+      assert.equal(toolchain.nodePath, layout.nodePath);
+      assert.equal(toolchain.npmCliPath, layout.npmCliPath);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('fails toolchain preflight before daemon removal when no npm reports the package prefix', () => {
+    const layout = createGlobalInstallLayout({ withToolchain: false });
+    const runtime = createRuntimeToolchain('/wrong/system/prefix');
+    let removed = false;
+    try {
+      assert.throws(
+        () => {
+          const plan = createUpgradePlan({
+            installMode: 'global',
+            packageRoot: layout.packageRoot,
+            execPath: runtime.nodePath,
+            env: { PATH: path.dirname(runtime.npmPath), npm_execpath: runtime.npmCliPath },
+          });
+          executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+        },
+        /no accessible Node\/npm toolchain reports target global prefix/i,
+      );
+      assert.equal(removed, false);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+      fs.rmSync(runtime.prefix, { recursive: true, force: true });
+    }
+  });
+
   it('rejects unsupported or incomplete global layouts before daemon removal', () => {
     for (const [missingKey, expectedError] of [
-      ['nodePath', /Node executable.*not found/i],
-      ['npmCliPath', /npm CLI.*not found/i],
+      ['nodePath', /no accessible Node\/npm toolchain/i],
+      ['npmCliPath', /no accessible Node\/npm toolchain/i],
       ['jumpBinPath', /jump\.sh bin.*not found/i],
     ]) {
       const layout = createGlobalInstallLayout();
