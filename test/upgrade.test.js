@@ -40,6 +40,7 @@ describe('CLI upgrade registration/help', () => {
     assert.ok(r.stdout.includes('Usage: jump.sh upgrade'));
     assert.ok(r.stdout.includes('preserves ~/.jump.sh'));
     assert.ok(r.stdout.includes('daemon service'));
+    assert.ok(r.stdout.includes('before removing the current daemon'));
   });
 });
 
@@ -47,9 +48,31 @@ describe('upgrade planning and safety', async () => {
   const {
     createUpgradePlan,
     executeUpgradeCommand,
+    executeUpgradePlan,
+    readInstalledVersion,
     removeDaemonOnly,
+    resolveGlobalToolchain,
+    resolveLatestVersion,
     resolveSafeUpgradeCwd,
   } = await import('../lib/commands/upgrade.js');
+
+  function createGlobalInstallLayout() {
+    const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-global-prefix-'));
+    const packageRoot = path.join(prefix, 'lib', 'node_modules', 'jump.sh');
+    const nodePath = path.join(prefix, 'bin', 'node');
+    const npmCliPath = path.join(prefix, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    const jumpBinPath = path.join(packageRoot, 'bin', 'jumpsh.js');
+
+    fs.mkdirSync(path.dirname(nodePath), { recursive: true });
+    fs.mkdirSync(path.dirname(npmCliPath), { recursive: true });
+    fs.mkdirSync(path.dirname(jumpBinPath), { recursive: true });
+    fs.writeFileSync(nodePath, '');
+    fs.writeFileSync(npmCliPath, '');
+    fs.writeFileSync(jumpBinPath, '');
+    fs.chmodSync(nodePath, 0o755);
+
+    return { prefix, packageRoot, nodePath, npmCliPath, jumpBinPath };
+  }
 
   it('plans npx upgrades through the latest installer trampoline', () => {
     const plan = createUpgradePlan({ installMode: 'npx', binPath: '/tmp/current/bin/jumpsh.js' });
@@ -58,13 +81,155 @@ describe('upgrade planning and safety', async () => {
     ]);
   });
 
-  it('plans global npm upgrades without deleting state', () => {
-    const plan = createUpgradePlan({ installMode: 'global', binPath: '/usr/local/bin/jump.sh' });
-    assert.deepEqual(plan.commands, [
-      { command: 'npm', args: ['install', '-g', 'jump.sh@latest'] },
-      { command: 'jump.sh', args: ['install'] },
-    ]);
-    assert.equal(plan.preserveState, true);
+  it('plans global npm upgrades through the package-owning Node installation', () => {
+    const layout = createGlobalInstallLayout();
+    try {
+      const plan = createUpgradePlan({
+        installMode: 'global',
+        packageRoot: layout.packageRoot,
+      });
+
+      assert.deepEqual(plan.commands, [
+        {
+          command: layout.nodePath,
+          args: [layout.npmCliPath, 'install', '-g', 'jump.sh@latest', '--prefix', layout.prefix],
+        },
+        {
+          command: layout.nodePath,
+          args: [layout.jumpBinPath, 'install'],
+        },
+      ]);
+      assert.equal(plan.preserveState, true);
+      assert.ok(plan.commands.every(({ command }) => command !== 'npm' && command !== 'jump.sh'));
+      assert.ok(plan.commands.every(({ command }) => command !== process.execPath));
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unsupported or incomplete global layouts before daemon removal', () => {
+    for (const [missingKey, expectedError] of [
+      ['nodePath', /Node executable.*not found/i],
+      ['npmCliPath', /npm CLI.*not found/i],
+      ['jumpBinPath', /jump\.sh bin.*not found/i],
+    ]) {
+      const layout = createGlobalInstallLayout();
+      let removed = false;
+      try {
+        fs.rmSync(layout[missingKey]);
+        assert.throws(
+          () => {
+            const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
+            executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+          },
+          expectedError,
+        );
+        assert.equal(removed, false);
+      } finally {
+        fs.rmSync(layout.prefix, { recursive: true, force: true });
+      }
+    }
+
+    assert.throws(
+      () => resolveGlobalToolchain({ packageRoot: path.join(os.tmpdir(), 'share', 'jump.sh') }),
+      /expected.*lib.*node_modules.*jump\.sh/i,
+    );
+  });
+
+  it('rejects an unwritable global install target before daemon removal', () => {
+    const layout = createGlobalInstallLayout();
+    let removed = false;
+    const fileSystem = {
+      ...fs,
+      accessSync(target, mode) {
+        if (target === path.join(layout.prefix, 'lib', 'node_modules') && mode === fs.constants.W_OK) {
+          const err = new Error('permission denied');
+          err.code = 'EACCES';
+          throw err;
+        }
+        return fs.accessSync(target, mode);
+      },
+    };
+
+    try {
+      assert.throws(
+        () => {
+          const plan = createUpgradePlan({
+            installMode: 'global',
+            packageRoot: layout.packageRoot,
+            fileSystem,
+          });
+          executeUpgradePlan(plan, { removeDaemon: () => { removed = true; } });
+        },
+        /global install target.*not writable/i,
+      );
+      assert.equal(removed, false);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('does not remove the daemon when global package installation fails', () => {
+    const layout = createGlobalInstallLayout();
+    const events = [];
+    try {
+      const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
+      assert.throws(
+        () => executeUpgradePlan(plan, {
+          cwd: layout.prefix,
+          executeCommand: (step) => {
+            events.push(step);
+            throw new Error('registry unavailable');
+          },
+          removeDaemon: () => events.push('remove'),
+        }),
+        /registry unavailable/,
+      );
+      assert.deepEqual(events, [plan.commands[0]]);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('removes the daemon only between global package and service installation', () => {
+    const layout = createGlobalInstallLayout();
+    const events = [];
+    try {
+      const plan = createUpgradePlan({ installMode: 'global', packageRoot: layout.packageRoot });
+      executeUpgradePlan(plan, {
+        cwd: layout.prefix,
+        executeCommand: (step) => events.push(step),
+        removeDaemon: () => {
+          events.push('remove');
+          return [];
+        },
+      });
+      assert.deepEqual(events, [plan.commands[0], 'remove', plan.commands[1]]);
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the global installation toolchain for registry and installed version lookups', () => {
+    const layout = createGlobalInstallLayout();
+    const calls = [];
+    const commandRunner = (command, args, options) => {
+      calls.push({ command, args, options });
+      return calls.length === 1 ? '1.2.3\n' : 'jump.sh 1.2.3\n';
+    };
+
+    try {
+      const toolchain = resolveGlobalToolchain({ packageRoot: layout.packageRoot });
+      assert.equal(resolveLatestVersion('global', { toolchain, cwd: layout.prefix, execFileSync: commandRunner }), '1.2.3');
+      assert.equal(readInstalledVersion('global', { toolchain, cwd: layout.prefix, execFileSync: commandRunner }), '1.2.3');
+      assert.deepEqual(calls.map(({ command, args }) => ({ command, args })), [
+        { command: layout.nodePath, args: [layout.npmCliPath, 'view', 'jump.sh@latest', 'version'] },
+        { command: layout.nodePath, args: [layout.jumpBinPath, '--version'] },
+      ]);
+      assert.ok(calls.every(({ options }) => options.cwd === layout.prefix));
+    } finally {
+      fs.rmSync(layout.prefix, { recursive: true, force: true });
+    }
   });
 
   it('plans local checkout upgrades without global npm mutation', () => {
@@ -79,6 +244,7 @@ describe('upgrade planning and safety', async () => {
     const originalCwd = process.cwd();
     const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-upgrade-safe-home-'));
     const tmpParent = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-upgrade-deleted-cwd-'));
+    const globalLayout = createGlobalInstallLayout();
     const deletedCwd = path.join(tmpParent, 'deleted');
     fs.mkdirSync(deletedCwd);
 
@@ -90,7 +256,10 @@ describe('upgrade planning and safety', async () => {
       const safeCwd = resolveSafeUpgradeCwd({ homeDir: tmpHome, packageRoot: ROOT });
       const plans = [
         createUpgradePlan({ installMode: 'npx' }),
-        createUpgradePlan({ installMode: 'global' }),
+        createUpgradePlan({
+          installMode: 'global',
+          packageRoot: globalLayout.packageRoot,
+        }),
         createUpgradePlan({ installMode: 'local', binPath: path.join(ROOT, 'bin', 'jumpsh.js') }),
       ];
 
@@ -117,6 +286,7 @@ describe('upgrade planning and safety', async () => {
       process.chdir(originalCwd);
       fs.rmSync(tmpHome, { recursive: true, force: true });
       fs.rmSync(tmpParent, { recursive: true, force: true });
+      fs.rmSync(globalLayout.prefix, { recursive: true, force: true });
     }
   });
 
