@@ -1,5 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   generateDaemonWrapper,
   isNpxRun,
@@ -53,15 +57,64 @@ describe('install daemon wrapper generation', () => {
       packageRoot,
       env: {},
       binExists: () => true,
+      nodePath: '/opt/node/bin/node',
+      nodeExists: () => true,
     });
     const wrapper = generateDaemonWrapper(config);
 
     assert.deepEqual(config, {
       cwd: packageRoot,
-      execCommand: "node '/opt/jump.sh/bin/jumpsh.js' server",
+      execCommand: "'/opt/node/bin/node' '/opt/jump.sh/bin/jumpsh.js' server",
     });
     assert.ok(wrapper.includes("cd '/opt/jump.sh' 2>/dev/null"));
-    assert.ok(wrapper.includes("exec node '/opt/jump.sh/bin/jumpsh.js' server"));
+    assert.ok(wrapper.includes("exec '/opt/node/bin/node' '/opt/jump.sh/bin/jumpsh.js' server"));
+  });
+
+  it('uses the current absolute Node path by default for local and global installs', () => {
+    const config = resolveDaemonWrapperConfig({
+      packageRoot: '/opt/jump.sh',
+      env: {},
+      binExists: () => true,
+    });
+
+    assert.equal(
+      config.execCommand,
+      `${shellQuote(process.execPath)} '/opt/jump.sh/bin/jumpsh.js' server`,
+    );
+  });
+
+  it('runs the wrapper with its exact absolute Node under an empty service-like PATH', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpsh-wrapper-node-'));
+    const packageRoot = path.join(tmpDir, 'jump.sh');
+    const binPath = path.join(packageRoot, 'bin', 'jumpsh.js');
+    const nodePath = path.join(tmpDir, "node runtime's", 'bin', 'node');
+    const resultPath = path.join(tmpDir, 'result.json');
+    const wrapperPath = path.join(tmpDir, 'jumpsh-daemon.sh');
+
+    try {
+      fs.mkdirSync(path.dirname(binPath), { recursive: true });
+      fs.mkdirSync(path.dirname(nodePath), { recursive: true });
+      fs.writeFileSync(binPath, '');
+      fs.writeFileSync(
+        nodePath,
+        `#!/bin/sh\nprintf '{"cwd":"%s","bin":"%s","arg":"%s"}' "$PWD" "$1" "$2" > ${shellQuote(resultPath)}\n`,
+        { mode: 0o755 },
+      );
+
+      const config = resolveDaemonWrapperConfig({ packageRoot, env: {}, nodePath });
+      fs.writeFileSync(wrapperPath, generateDaemonWrapper(config), { mode: 0o755 });
+      execFileSync('/bin/bash', [wrapperPath], {
+        env: { HOME: tmpDir, PATH: '' },
+      });
+
+      assert.deepEqual(JSON.parse(fs.readFileSync(resultPath, 'utf8')), {
+        cwd: packageRoot,
+        bin: binPath,
+        arg: 'server',
+      });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('guards mise activation by command availability', () => {
@@ -78,6 +131,18 @@ describe('install daemon wrapper generation', () => {
     assert.equal(resolveNpxPath(() => ''), null);
     assert.equal(resolveNpxPath(() => { throw new Error('missing'); }), null);
     assert.equal(shellQuote("/tmp/has ' quote"), "'/tmp/has '\"'\"' quote'");
-    assert.equal(resolveGlobalBin({ packageRoot: '/opt/jump.sh', binExists: () => true }), "node '/opt/jump.sh/bin/jumpsh.js'");
+    assert.equal(
+      resolveGlobalBin({
+        packageRoot: '/opt/jump.sh',
+        binExists: () => true,
+        nodePath: '/opt/node/bin/node',
+        nodeExists: () => true,
+      }),
+      "'/opt/node/bin/node' '/opt/jump.sh/bin/jumpsh.js'",
+    );
+    assert.throws(
+      () => resolveGlobalBin({ packageRoot: '/opt/jump.sh', binExists: () => true, nodePath: 'node' }),
+      /absolute Node executable/i,
+    );
   });
 });
