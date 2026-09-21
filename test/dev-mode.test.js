@@ -424,7 +424,7 @@ describe('SubdomainProxy context-host routing', () => {
     });
   });
 
-  it('resolves encoded host via X-Forwarded-Host fallback', (t, done) => {
+  it('ignores X-Forwarded-Host and rejects an unrelated Host', (t, done) => {
     const fixturePath = path.join(fixturesDir, 'static-html');
     const project = { id: 3, name: 'fixture-static-html', path: fixturePath, subdomain: 'fixture-static-html' };
     const db = {
@@ -447,7 +447,8 @@ describe('SubdomainProxy context-host routing', () => {
 
       setTimeout(() => {
         assert.ok(res.body, 'Should have response body');
-        assert.ok(res.body.includes('fixture-static-html'), 'Should resolve via forwarded host');
+        assert.equal(res.statusCode, 421);
+        assert.equal(res.body, 'Misdirected Request');
         done();
       }, 50);
     });

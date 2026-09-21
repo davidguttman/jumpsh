@@ -225,4 +225,16 @@ describe('CLI status --json', () => {
     assert.ok('dashboard' in parsed);
     assert.equal(typeof parsed.running, 'boolean');
   });
+
+  it('status --json honors JUMPSH_DASHBOARD_HOST', () => {
+    const r = runCli(['status', '--json'], {
+      env: {
+        JUMPSH_DASHBOARD_HOST: 'control.example.test',
+        JUMPSH_DOMAIN: 'alice.jump.sh',
+      },
+    });
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout);
+    assert.equal(parsed.dashboard, 'https://control.example.test');
+  });
 });
