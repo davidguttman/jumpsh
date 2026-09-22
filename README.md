@@ -84,7 +84,16 @@ JUMPSH_HTTPS=true
 JUMPSH_PORT=4443
 JUMPSH_DOMAIN=jump.sh
 JUMPSH_CERT_PATH=~/.jump.sh/certs
+JUMPSH_DASHBOARD_HOST=dash.jump.sh
 ```
+
+### Management security
+
+The dashboard, management APIs, static assets, logs, and event streams require authentication. `jump.sh install` creates a random token at `~/.jump.sh/management-token`; daemon startup creates it lazily for existing upgrades. The state directory uses mode `0700` and the token file uses `0600` where supported. Existing tokens are preserved, and CLI daemon requests send the token automatically as a bearer credential.
+
+Browsers use standard HTTP Basic authentication once per browser session: username `jump`, password the contents of `~/.jump.sh/management-token`. `jump.sh open` prints the username and token-file location without printing the token or embedding credentials in the URL. After upgrading, existing dashboard tabs receive `401` until Basic authentication is entered. Use HTTPS for the dashboard. Only the exact configured dashboard host is accepted, and `X-Forwarded-Host` is ignored, so reverse proxies must preserve the original `Host` header.
+
+Project app subdomains remain public while running. Opening a stopped project returns `503` and never starts it or changes its desired state. jump.sh-owned published ports bind to `127.0.0.1` and are exposed publicly only through the hostname proxy.
 
 ### HTTPS Setup
 

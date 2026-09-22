@@ -80,7 +80,7 @@ function getJumpComposeOverridePath(project) {
   return path.join(getJumpshDir(getProjectSlug(project)), JUMP_COMPOSE_OVERRIDE);
 }
 
-function writeJumpComposeOverride(project, { serviceName, assignedPort, internalPort, replacePorts }) {
+export function writeJumpComposeOverride(project, { serviceName, assignedPort, internalPort, replacePorts }) {
   const overridePath = getJumpComposeOverridePath(project);
   fs.mkdirSync(path.dirname(overridePath), { recursive: true });
   const portsKey = replacePorts ? 'ports: !override' : 'ports:';
@@ -92,6 +92,7 @@ services:
     ${portsKey}
       - target: ${internalPort}
         published: "${assignedPort}"
+        host_ip: 127.0.0.1
         protocol: tcp
         mode: host
 `;

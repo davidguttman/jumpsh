@@ -20,11 +20,12 @@ import { getJumpshDir } from './services/ComposeGenerator.js';
 import { devinfo, deverror, rotateLogs } from './lib/devlog.js';
 import { ensureHttpsCerts } from './lib/commands/certs.js';
 import { localCertStatus } from './lib/cert-status.js';
+import { detectDashboardHost } from './lib/domain.js';
 import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
-import { encodeContextHost } from './lib/context-host.js';
 import { sortWorktreesByRecency } from './lib/worktree-recency.js';
 import { pruneWorktrees } from './lib/worktree-prune.js';
+import { ensureManagementToken, managementAuth } from './lib/management-auth.js';
 import {
   autoStartDesiredProjects,
   restartProjectWithWorktrees,
@@ -68,24 +69,6 @@ function detectDomainFromCerts() {
   return null;
 }
 
-// Detect domain from Host header (strip first label to get base domain)
-function detectDomainFromHost(hostname) {
-  const host = hostname.replace(/:\d+$/, '');
-  // Explicit dashboard prefixes
-  for (const prefix of ['dash.', 'dashboard.']) {
-    if (host.startsWith(prefix)) {
-      return host.slice(prefix.length);
-    }
-  }
-  // For any subdomain host with 3+ labels (e.g. project.user.jump.sh),
-  // derive base domain as everything after the first label
-  const labels = host.split('.');
-  if (labels.length >= 3) {
-    return labels.slice(1).join('.');
-  }
-  return null;
-}
-
 // Priority: CLI flag (via env) > Cert detection > Env var default > 'jump.sh'
 const domain = process.env.JUMPSH_DOMAIN || detectDomainFromCerts() || 'jump.sh';
 
@@ -97,7 +80,7 @@ const config = {
   domain,
   https: process.env.JUMPSH_HTTPS !== 'false',
   certPath,
-  dashboardHost: process.env.JUMPSH_DASHBOARD_HOST || `dash.${domain}`
+  dashboardHost: detectDashboardHost(domain)
 };
 
 /**
@@ -121,47 +104,25 @@ const db = new Database();
 const docker = devMode ? new MockDockerManager(db) : new DockerManager(db);
 const worktreeScanner = new WorktreeScanner(db, docker);
 const subdomainProxy = new SubdomainProxy(db, docker, config);
+const managementToken = ensureManagementToken();
 
 const app = express();
 
 // Subdomain proxy (must be first)
 app.use(subdomainProxy.middleware());
 
-// Middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Everything reaching Express is the exact configured dashboard host.
+app.use(managementAuth({ token: managementToken, dashboardOrigin: formatUrl(config.dashboardHost) }));
+app.use(express.urlencoded({ extended: true, limit: '128kb' }));
+app.use(express.json({ limit: '128kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Per-request domain detection from Host header
 app.use((req, res, next) => {
-  const hostHeader = req.get('x-forwarded-host') || req.get('host') || '';
-  const detected = detectDomainFromHost(hostHeader);
-  if (detected && detected !== config.domain) {
-    req.requestConfig = { ...config, domain: detected, dashboardHost: `dash.${detected}` };
-    req.requestConfig.formatUrl = formatUrl;
-  } else {
-    req.requestConfig = config;
-  }
-
-  // In dev mode, detect context subdomain for encoded project links
-  if (devMode) {
-    const host = hostHeader.replace(/:\d+$/, '');
-    const firstLabel = host.split('.')[0];
-    if (firstLabel && firstLabel !== 'dash' && firstLabel !== 'dashboard' && firstLabel !== 'www'
-        && firstLabel !== 'localhost' && firstLabel !== req.requestConfig.domain.split('.')[0]) {
-      req.requestConfig = { ...req.requestConfig, contextSubdomain: firstLabel };
-    }
-  }
-
-  // Helper: generate project URL, using encoded context host when applicable
-  const rc = req.requestConfig;
-  rc.projectUrl = function(projectSubdomain) {
-    if (rc.contextSubdomain) {
-      return formatUrl(encodeContextHost(projectSubdomain, rc.contextSubdomain) + '.' + rc.domain);
-    }
-    return formatUrl(projectSubdomain + '.' + rc.domain);
+  req.requestConfig = { ...config };
+  req.requestConfig.projectUrl = function(projectSubdomain) {
+    return formatUrl(projectSubdomain + '.' + config.domain);
   };
 
   next();

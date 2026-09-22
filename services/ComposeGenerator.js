@@ -352,7 +352,7 @@ services:
   app:
     image: ${serializeComposeScalar(detection.dockerImage || 'nginx:alpine')}
     ports:
-      - "${assignedPort}:${internalPort}"
+      - "127.0.0.1:${assignedPort}:${internalPort}"
     volumes:
       - ${serializeComposeScalar(`${projectPath}:/usr/share/nginx/html:ro`)}
     extra_hosts:
@@ -464,7 +464,7 @@ services:
       context: ${serializeComposeScalar(projectPath)}
       dockerfile: ${serializeComposeScalar(path.join(jumpshDir, 'Dockerfile'))}
     ports:
-      - "${assignedPort}:${internalPort}"
+      - "127.0.0.1:${assignedPort}:${internalPort}"
     volumes:
 ${volumes.join('\n')}${dependsOnSection}${envFileSection}${envSection}
     extra_hosts:

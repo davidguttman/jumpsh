@@ -10,58 +10,6 @@ const config = {
   formatUrl: (host, p) => p ? `https://${host}${p}` : `https://${host}`,
 };
 
-// ---- extractSubdomain ----
-
-describe('SubdomainProxy extractSubdomain', () => {
-  const proxy = new SubdomainProxy({}, {}, config);
-
-  it('extracts subdomain from standard host', () => {
-    assert.equal(proxy.extractSubdomain('myapp.jump.sh'), 'myapp');
-  });
-
-  it('strips port before extracting', () => {
-    assert.equal(proxy.extractSubdomain('myapp.jump.sh:4443'), 'myapp');
-  });
-
-  it('returns null for bare domain (single part)', () => {
-    assert.equal(proxy.extractSubdomain('localhost'), null);
-  });
-
-  it('extracts worktree subdomain with double-dash', () => {
-    assert.equal(proxy.extractSubdomain('myapp--feature.jump.sh'), 'myapp--feature');
-  });
-
-  it('returns first part for two-part domain', () => {
-    assert.equal(proxy.extractSubdomain('jump.sh'), 'jump');
-  });
-});
-
-// ---- isMainDomain ----
-
-describe('SubdomainProxy isMainDomain', () => {
-  const proxy = new SubdomainProxy({}, {}, config);
-
-  it('returns true for "dash"', () => {
-    assert.equal(proxy.isMainDomain('dash'), true);
-  });
-
-  it('returns true for "dashboard"', () => {
-    assert.equal(proxy.isMainDomain('dashboard'), true);
-  });
-
-  it('returns true for "www"', () => {
-    assert.equal(proxy.isMainDomain('www'), true);
-  });
-
-  it('returns true for domain prefix ("jump")', () => {
-    assert.equal(proxy.isMainDomain('jump'), true);
-  });
-
-  it('returns false for project subdomain', () => {
-    assert.equal(proxy.isMainDomain('myapp'), false);
-  });
-});
-
 // ---- middleware ----
 
 function mockReq(host) {
@@ -80,12 +28,14 @@ function mockRes() {
 }
 
 describe('SubdomainProxy middleware', () => {
-  it('calls next() when no host header', async () => {
+  it('rejects requests with no host header', async () => {
     const proxy = new SubdomainProxy({}, {}, config);
     const mw = proxy.middleware();
+    const res = mockRes();
     let nextCalled = false;
-    await mw(mockReq(undefined), mockRes(), () => { nextCalled = true; });
-    assert.ok(nextCalled);
+    await mw(mockReq(undefined), res, () => { nextCalled = true; });
+    assert.equal(nextCalled, false);
+    assert.equal(res.statusCode, 421);
   });
 
   it('calls next() for main domain', async () => {
@@ -96,12 +46,42 @@ describe('SubdomainProxy middleware', () => {
     assert.ok(nextCalled);
   });
 
-  it('calls next() when subdomain is null (single-part host)', async () => {
+  it('rejects single-part hosts', async () => {
     const proxy = new SubdomainProxy({}, {}, config);
     const mw = proxy.middleware();
+    const res = mockRes();
     let nextCalled = false;
-    await mw(mockReq('localhost'), mockRes(), () => { nextCalled = true; });
-    assert.ok(nextCalled);
+    await mw(mockReq('localhost'), res, () => { nextCalled = true; });
+    assert.equal(nextCalled, false);
+    assert.equal(res.statusCode, 421);
+  });
+
+  it('ignores X-Forwarded-Host on websocket upgrades', async () => {
+    let upgradeHandler;
+    const server = {
+      on(event, handler) {
+        assert.equal(event, 'upgrade');
+        upgradeHandler = handler;
+      },
+    };
+    let dbCalls = 0;
+    const proxy = new SubdomainProxy({
+      getProjectBySubdomain: () => { dbCalls++; },
+    }, {}, config);
+    proxy.attachUpgrade(server);
+
+    let destroyed = false;
+    await upgradeHandler({
+      headers: {
+        host: 'localhost',
+        'x-forwarded-host': 'myapp.jump.sh',
+      },
+    }, {
+      destroy() { destroyed = true; },
+    }, Buffer.alloc(0));
+
+    assert.equal(destroyed, true);
+    assert.equal(dbCalls, 0);
   });
 
   it('returns 404 when project not found', (t, done) => {
@@ -155,9 +135,9 @@ describe('SubdomainProxy cache', () => {
   });
 });
 
-// ---- auto-start interstitial ----
+// ---- unavailable interstitial ----
 
-describe('SubdomainProxy auto-start interstitial', () => {
+describe('SubdomainProxy unavailable interstitial', () => {
   function projectRecord(overrides = {}) {
     return { id: 42, name: 'myapp', subdomain: 'myapp', path: '/tmp/myapp', ...overrides };
   }
@@ -183,7 +163,7 @@ describe('SubdomainProxy auto-start interstitial', () => {
     return res;
   }
 
-  it('auto-starts a stopped registered project and returns an interstitial', async () => {
+  it('does not auto-start a stopped registered project', async () => {
     const project = projectRecord();
     const updateCalls = [];
     let startCalls = 0;
@@ -199,14 +179,13 @@ describe('SubdomainProxy auto-start interstitial', () => {
     await proxy.middleware()(mockReq('myapp.jump.sh'), res, () => assert.fail('next should not be called'));
 
     assert.equal(res.statusCode, 503);
-    assert.match(res.body, /Starting myapp/);
-    assert.match(res.body, /\.jump-sh\/proxy-status/);
-    assert.match(res.body, /Loading/);
-    assert.equal(startCalls, 1);
-    assert.deepEqual(updateCalls, [{ id: 42, updates: { desired_running: 1 } }]);
+    assert.match(res.body, /myapp is not running/);
+    assert.match(res.body, /Public requests do not start stopped projects/);
+    assert.equal(startCalls, 0);
+    assert.deepEqual(updateCalls, []);
   });
 
-  it('does not trigger duplicate starts when the project is already starting', async () => {
+  it('never invokes start when the project is already starting', async () => {
     const project = projectRecord();
     let startCalls = 0;
     const db = dbForProject(project);
@@ -221,174 +200,8 @@ describe('SubdomainProxy auto-start interstitial', () => {
     await proxy.middleware()(mockReq('myapp.jump.sh'), res, () => assert.fail('next should not be called'));
 
     assert.equal(res.statusCode, 503);
-    assert.match(res.body, /Starting myapp/);
+    assert.match(res.body, /myapp is not running/);
     assert.equal(startCalls, 0);
-  });
-
-  it('serves same-origin proxy status for readiness polling once healthy', async () => {
-    const project = projectRecord();
-    const db = dbForProject(project);
-    const docker = {
-      getPort: async () => 10042,
-      getHealth: () => 'healthy',
-      isStarting: () => false,
-      getStartupStep: () => null,
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    let readinessCalls = 0;
-    proxy.isHttpTargetReady = async (port) => {
-      readinessCalls++;
-      assert.equal(port, 10042);
-      return true;
-    };
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(readinessCalls, 1);
-    assert.equal(res.statusCode, null);
-    assert.deepEqual(res.jsonBody, { running: true, starting: false, port: 10042 });
-  });
-
-  it('keeps proxy status starting when health is healthy but HTTP readiness is false', async () => {
-    const project = projectRecord();
-    const db = dbForProject(project);
-    const docker = {
-      getPort: async () => 10042,
-      getHealth: () => 'healthy',
-      isStarting: () => false,
-      getStartupStep: () => null,
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    proxy.isHttpTargetReady = async () => false;
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(res.statusCode, null);
-    assert.deepEqual(res.jsonBody, {
-      running: false,
-      starting: true,
-      port: 10042,
-      health: 'healthy',
-      step: null,
-      dashboardUrl: 'https://dashboard.jump.sh/projects/42',
-    });
-  });
-
-  it('keeps proxy status starting while a port exists but health is still starting', async () => {
-    const project = projectRecord();
-    const step = { step: 4, totalSteps: 5, label: 'Waiting for health check...' };
-    const db = dbForProject(project);
-    const docker = {
-      getPort: async () => 10042,
-      getHealth: () => 'starting',
-      isStarting: () => false,
-      getStartupStep: () => step,
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(res.statusCode, null);
-    assert.deepEqual(res.jsonBody, {
-      running: false,
-      starting: true,
-      port: 10042,
-      health: 'starting',
-      step,
-      dashboardUrl: 'https://dashboard.jump.sh/projects/42',
-    });
-  });
-
-  it('triggers a health probe for unknown health with an available port', async () => {
-    const project = projectRecord();
-    const db = dbForProject(project);
-    let probeCalls = 0;
-    const docker = {
-      getPort: async () => 10042,
-      getHealth: () => 'unknown',
-      getHealthWithProbe: (p, status) => {
-        probeCalls++;
-        assert.equal(p, project);
-        assert.deepEqual(status, { running: true, port: 10042 });
-        return 'starting';
-      },
-      isStarting: () => false,
-      getStartupStep: () => null,
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(probeCalls, 1);
-    assert.equal(res.statusCode, null);
-    assert.deepEqual(res.jsonBody, {
-      running: false,
-      starting: true,
-      port: 10042,
-      health: 'starting',
-      step: null,
-      dashboardUrl: 'https://dashboard.jump.sh/projects/42',
-    });
-  });
-
-  it('reports unhealthy port-backed projects as proxy status failures', async () => {
-    const project = projectRecord();
-    const db = dbForProject(project);
-    const docker = {
-      getPort: async () => 10042,
-      getHealth: () => 'unhealthy',
-      isStarting: () => false,
-      getStartupStep: () => null,
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(res.statusCode, 500);
-    assert.deepEqual(res.jsonBody, {
-      running: false,
-      starting: false,
-      port: 10042,
-      health: 'unhealthy',
-      error: 'Project is unhealthy',
-      dashboardUrl: 'https://dashboard.jump.sh/projects/42',
-    });
-  });
-
-  it('reports start failures through the proxy status endpoint', async () => {
-    const project = projectRecord();
-    const db = dbForProject(project);
-    const docker = {
-      getPort: async () => null,
-      isStarting: () => false,
-      start: async () => ({ success: false, error: 'Docker unavailable' }),
-    };
-    const proxy = new SubdomainProxy(db, docker, config);
-    const first = mockRes();
-    await proxy.middleware()(mockReq('myapp.jump.sh'), first, () => assert.fail('next should not be called'));
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    const req = { get: (h) => h === 'host' ? 'myapp.jump.sh' : undefined, url: '/.jump-sh/proxy-status' };
-    const res = jsonRes();
-    await proxy.middleware()(req, res, () => assert.fail('next should not be called'));
-
-    assert.equal(res.statusCode, 500);
-    assert.deepEqual(res.jsonBody, {
-      running: false,
-      starting: false,
-      error: 'Docker unavailable',
-      dashboardUrl: 'https://dashboard.jump.sh/projects/42',
-    });
   });
 
   it('returns the interstitial instead of proxying normal requests while HTTP readiness is false', async () => {
@@ -418,7 +231,7 @@ describe('SubdomainProxy auto-start interstitial', () => {
     assert.equal(readinessCalls, 1);
     assert.equal(proxied, false);
     assert.equal(res.statusCode, 503);
-    assert.match(res.body, /Starting myapp/);
+    assert.match(res.body, /myapp is starting/);
     assert.equal(res.headers['cache-control'], 'no-store');
   });
 
