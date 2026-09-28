@@ -95,6 +95,8 @@ Browsers use standard HTTP Basic authentication once per browser session: userna
 
 Project app subdomains remain public while running. Opening a stopped project returns `503` and never starts it or changes its desired state. jump.sh-owned published ports bind to `127.0.0.1` and are exposed publicly only through the hostname proxy.
 
+If certificates are unavailable, automatic HTTP fallback still serves project apps, but remote management requests receive `403` without a Basic-auth challenge. Never enter dashboard credentials over remote HTTP. Management accepts HTTP only from a direct loopback socket (including IPv4-mapped loopback); forwarded headers cannot enable it. TLS-terminating proxies must connect to the daemon over TLS or loopback, not a remote plaintext backend connection. CLI management requires HTTPS even for local use: dashboard hostnames may resolve remotely, so an HTTP endpoint in `server.json` is rejected before reading or sending the token. CLI requests also refuse redirects. This intentionally removes plaintext CLI/remote management compatibility; restore certificates with `jump.sh certs` and restart the daemon. Browser mutation checks use the final configured dashboard origin, including any fallback port/protocol, never request-supplied host headers.
+
 ### HTTPS Setup
 
 Certificates are downloaded from the jump.sh server:

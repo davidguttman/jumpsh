@@ -112,7 +112,7 @@ const app = express();
 app.use(subdomainProxy.middleware());
 
 // Everything reaching Express is the exact configured dashboard host.
-app.use(managementAuth({ token: managementToken, dashboardOrigin: formatUrl(config.dashboardHost) }));
+app.use(managementAuth({ token: managementToken, dashboardOrigin: () => formatUrl(config.dashboardHost) }));
 app.use(express.urlencoded({ extended: true, limit: '128kb' }));
 app.use(express.json({ limit: '128kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -816,7 +816,8 @@ if (config.https) {
     console.warn(
       `JUMPSH_HTTPS=true but no certs found.\n` +
       `Place cert files (server.pem and server-key.pem) in ${config.certPath}.\n` +
-      `Falling back to HTTP.`
+      `Falling back to HTTP. Remote management is disabled; CLI management requires HTTPS.\n` +
+      `Restore certificates to use remote management. Do not enter dashboard credentials over remote HTTP.`
     );
     config.https = false;
     server = http.createServer(app);

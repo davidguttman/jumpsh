@@ -20,6 +20,7 @@ function req(headers = {}, extra = {}) {
   const normalized = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
   return {
     method: 'GET',
+    socket: { encrypted: true, remoteAddress: '192.0.2.1' },
     headers: normalized,
     get(name) { return normalized[name.toLowerCase()]; },
     ...extra,
