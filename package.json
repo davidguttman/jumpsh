@@ -3,6 +3,10 @@
   "version": "1.0.0-rc.0",
   "type": "module",
   "description": "jump.sh — local dev server with Docker containers + subdomain routing",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidguttman/jumpsh.git"
+  },
   "main": "server.js",
   "bin": {
     "jump.sh": "bin/jumpsh.js"

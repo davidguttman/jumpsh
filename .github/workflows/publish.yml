@@ -1,0 +1,76 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the released version
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Verify release metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const expectedTag = `v${pkg.version}`;
+          const isPrereleaseVersion = pkg.version.includes("-");
+          const isPrereleaseRelease = process.env.IS_PRERELEASE === "true";
+
+          if (process.env.RELEASE_TAG !== expectedTag) {
+            throw new Error(
+              `Release tag ${process.env.RELEASE_TAG} does not match package version ${pkg.version}`,
+            );
+          }
+
+          if (isPrereleaseVersion !== isPrereleaseRelease) {
+            throw new Error(
+              "The GitHub release prerelease setting does not match the package version",
+            );
+          }
+          NODE
+
+      - name: Select npm distribution tag
+        id: dist-tag
+        env:
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish package
+        env:
+          NPM_TAG: ${{ steps.dist-tag.outputs.tag }}
+        run: npm publish --tag "$NPM_TAG"

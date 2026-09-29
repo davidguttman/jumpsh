@@ -282,8 +282,11 @@ describe('CLI output contracts', () => {
   it('--version output format is stable', () => {
     const r = runCli(['--version']);
     assert.equal(r.exitCode, 0);
-    assert.match(r.stdout.trim(), /^jump\.sh \d+\.\d+\.\d+$/,
-      'version output should be "jump.sh X.Y.Z"');
+    assert.match(
+      r.stdout.trim(),
+      /^jump\.sh \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/,
+      'version output should be "jump.sh X.Y.Z" with optional SemVer suffixes',
+    );
   });
 
   it('add --json output shape is stable', () => {
