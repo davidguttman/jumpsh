@@ -130,15 +130,17 @@ export async function getTxtRecord (name) {
 }
 
 export async function listRecordsByPrefix (prefix) {
-  if (!dns) return []
+  if (!dns) throw new Error('GCP DNS client not initialized')
 
   const zone = dns.zone(ZONE_NAME)
 
   try {
-    const [records] = await zone.getRecords({ type: 'TXT' })
+    // The string overload filters locally and auto-paginates; the API requires
+    // an exact name when a type query parameter is supplied.
+    const [records] = await zone.getRecords('TXT')
     return records.filter(r => r.name.startsWith(`${prefix}.`))
   } catch (err) {
     console.error(`TXT list failed for prefix ${prefix}:`, err.message)
-    return []
+    throw err
   }
 }

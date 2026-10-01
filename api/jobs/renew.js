@@ -120,7 +120,7 @@ export async function renewExpiring (deps = {}) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  renewExpiring().then(() => process.exit(0)).catch(err => {
+  renewExpiring().then(summary => process.exit(summary.failed > 0 ? 1 : 0)).catch(err => {
     console.error('Renewal script failed:', err)
     process.exit(1)
   })
