@@ -58,7 +58,8 @@ jobs:
         run: npm run lint
 
       - name: Test
-        run: npm test
+        timeout-minutes: 15
+        run: node --test --test-force-exit test/*.test.js
 
       - name: Verify release metadata
         env:
