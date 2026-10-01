@@ -1,4 +1,5 @@
 import { describe, it } from 'node:test';
+import { tmpRevocations } from './helpers/revocations.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,7 +14,7 @@ const token = 'test-management-token-that-is-long-enough-123';
 // Mint real browser session cookies through the login flow (stateless, token-keyed).
 async function mintCookie(encrypted) {
   const loginOrigin = 'https://mint.example.test';
-  const auth = managementAuth({ token, dashboardOrigin: loginOrigin });
+  const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: loginOrigin });
   const req = Object.assign(Readable.from([Buffer.from(`token=${token}`)]), {
     method: 'POST', url: '/login', headers: { origin: loginOrigin },
     socket: { encrypted, remoteAddress: '127.0.0.1' },
@@ -59,7 +60,7 @@ function serverAuth(config) {
   assert.ok(wiring, 'server must install management auth');
   let auth;
   vm.runInNewContext(`${formatter}\n${wiring}`, {
-    config, managementToken: token, managementAuth,
+    config, managementToken: token, managementAuth, managementRevocationsPath: tmpRevocations,
     app: { use(middleware) { auth = middleware; } },
   });
   return auth;
@@ -94,7 +95,7 @@ describe('management startup fallback (no listeners)', () => {
   });
 
   it('rejects remote plaintext before challenge or credential validation, ignoring forwarded headers', () => {
-    const auth = managementAuth({ token, dashboardOrigin: 'http://control.example.test:4443' });
+    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'http://control.example.test:4443' });
     for (const authorization of ['', `Bearer ${token}`]) {
       for (const remoteAddress of ['192.0.2.1', '::ffff:192.0.2.1', undefined]) {
         const result = request(auth, {
@@ -110,7 +111,7 @@ describe('management startup fallback (no listeners)', () => {
   });
 
   it('retains authenticated loopback HTTP and remote TLS access', () => {
-    const auth = managementAuth({ token, dashboardOrigin: 'http://control.example.test' });
+    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'http://control.example.test' });
     for (const remoteAddress of ['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1']) {
       assert.equal(request(auth, { encrypted: false, remoteAddress, origin: 'http://control.example.test' }).passed, true);
       assert.equal(request(auth, { encrypted: false, remoteAddress, cookie: '' }).statusCode, 401);
