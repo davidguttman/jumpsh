@@ -178,7 +178,7 @@ describe('browser token login', () => {
     const cookie = cookiePair((await login(auth)).res);
     const { res } = await run(auth, { url: '/login?next=%2Fadd', headers: { cookie, accept: 'text/html' } });
     assert.equal(res.statusCode, 303);
-    assert.equal(res.headers.location, '/add');
+    assert.equal(res.headers.location, '/add#');
   });
 
   it('rejects tampered, foreign, and wrong-transport cookies', async () => {
