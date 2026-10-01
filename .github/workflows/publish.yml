@@ -3,6 +3,12 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to publish (e.g. v1.0.0-rc.1)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,11 +18,28 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+
     steps:
       - name: Check out the released version
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Resolve release prerelease setting
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PRERELEASE: ${{ github.event.release.prerelease }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            prerelease="$EVENT_PRERELEASE"
+          else
+            prerelease="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
+          fi
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -28,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install test fixture dependencies
+        run: npm ci --prefix test/fixtures/apps/node-npm-vite
+
       - name: Lint
         run: npm run lint
 
@@ -36,8 +62,7 @@ jobs:
 
       - name: Verify release metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
           node <<'NODE'
           const fs = require("node:fs");
@@ -62,7 +87,7 @@ jobs:
       - name: Select npm distribution tag
         id: dist-tag
         env:
-          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
           if [[ "$IS_PRERELEASE" == "true" ]]; then
             echo "tag=next" >> "$GITHUB_OUTPUT"
