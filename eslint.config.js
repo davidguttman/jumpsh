@@ -27,6 +27,7 @@ export default [
         clearInterval: 'readonly',
         Buffer: 'readonly',
         URL: 'readonly',
+        URLSearchParams: 'readonly',
         fetch: 'readonly',
       },
     },

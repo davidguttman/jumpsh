@@ -119,6 +119,27 @@ header .header-actions a::before {
   content: '';
 }
 
+header .logout-form {
+  display: inline;
+}
+
+header .logout-form button {
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+  color: var(--text);
+  text-transform: lowercase;
+  letter-spacing: 1px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+header .logout-form button:hover,
+header .logout-form button:focus-visible {
+  color: var(--accent-cyan);
+}
+
 /* ---- Main ---- */
 main {
   max-width: 1280px;
