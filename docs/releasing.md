@@ -6,6 +6,6 @@ Use `npm version <major|minor|patch> --no-git-tag-version` to update package.jso
 
 ## 1.0.0 migration
 
-Management endpoints now require authentication. Install/start creates a per-install token at ~/.jump.sh/management-token; CLI daemon calls authenticate automatically. Browser username is `jump`, with the token as password. Use HTTPS. Existing browser sessions must authenticate.
+Management endpoints now require authentication. Install/start creates a per-install token at ~/.jump.sh/management-token; CLI daemon calls authenticate automatically. Browsers sign in on the `/login` page by pasting the token (no Basic-auth popup; Basic credentials are not accepted) and receive a host-only `HttpOnly` session cookie. `jump.sh open` signs the browser in automatically with a single-use login code. Use HTTPS. Existing browser sessions must sign in again.
 
 Only the configured dashboard hostname reaches management. Incoming X-Forwarded-Host is ignored. Running project applications remain accessible; visiting a stopped project no longer starts it. New jump-owned container port mappings use loopback; user-owned Compose mappings are not rewritten. Existing containers/mappings must not be assumed migrated merely by upgrading the npm package.

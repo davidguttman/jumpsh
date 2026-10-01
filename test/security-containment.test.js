@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
+import { tmpRevocations } from './helpers/revocations.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,7 +9,6 @@ import {
   managementAccessLines,
   managementAuth,
   managementTokenPath,
-  MANAGEMENT_USER,
 } from '../lib/management-auth.js';
 import { classifyHost } from '../lib/host-classification.js';
 import { callDaemon, daemonBaseUrl } from '../lib/commands/_helpers.js';
@@ -89,65 +89,38 @@ describe('management containment auth', () => {
     assert.match(serverSource, /ensureManagementToken\(\)/u);
   });
 
-  it('prints only the browser username and token-file location', () => {
+  it('prints only the token-file location for browser login', () => {
     const lines = managementAccessLines(home);
     assert.deepEqual(lines, [
-      `Dashboard username: ${MANAGEMENT_USER}`,
-      `Dashboard password: read ${managementTokenPath(home)}`,
+      `Dashboard login: paste the token from ${managementTokenPath(home)}`,
     ]);
     assert.equal(lines.some(line => line.includes(token)), false);
     assert.equal(lines.some(line => /https?:\/\/[^\s]*@/u.test(line)), false);
   });
 
-  it('denies unauthenticated dashboard, API, static, log, SSE and mutation requests', () => {
-    const auth = managementAuth({ token, dashboardOrigin: 'https://dash.jump.sh' });
-    for (const route of ['/', '/api/projects', '/styles.css', '/projects/1/logs', '/projects/1/logs/stream', '/projects/1/startup', '/projects']) {
+  it('denies unauthenticated API, static, log, SSE and mutation requests without a Basic challenge', () => {
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
+    for (const route of ['/api/projects', '/styles.css', '/projects/1/logs', '/projects/1/logs/stream', '/projects/1/startup', '/projects']) {
       const { passed, response } = authenticate(auth, req({}, { url: route, method: route === '/projects' ? 'POST' : 'GET' }));
       assert.equal(passed, false, route);
       assert.equal(response.statusCode, 401, route);
-      assert.match(response.headers['www-authenticate'], /^Basic /u);
+      assert.equal(response.headers['www-authenticate'], undefined, route);
     }
   });
 
-  it('accepts valid bearer and Basic credentials, and rejects bad credentials', () => {
-    const auth = managementAuth({ token, dashboardOrigin: 'https://dash.jump.sh' });
-    for (const authorization of [
-      `Bearer ${token}`,
-      `Basic ${Buffer.from(`${MANAGEMENT_USER}:${token}`).toString('base64')}`,
-    ]) {
-      assert.equal(authenticate(auth, req({ authorization })).passed, true);
-    }
+  it('accepts valid bearer credentials, and rejects bad or Basic credentials', () => {
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
+    assert.equal(authenticate(auth, req({ authorization: `Bearer ${token}` })).passed, true);
 
     for (const authorization of [
       'Bearer wrong',
-      `Basic ${Buffer.from(`other:${token}`).toString('base64')}`,
-      `Basic ${Buffer.from(`${MANAGEMENT_USER}:wrong`).toString('base64')}`,
+      `Basic ${Buffer.from(`jump:${token}`).toString('base64')}`,
     ]) {
       const { passed, response } = authenticate(auth, req({ authorization }));
       assert.equal(passed, false);
       assert.equal(response.statusCode, 401);
+      assert.equal(response.headers['www-authenticate'], undefined);
     }
-  });
-
-  it('requires the exact dashboard Origin or Referer for Basic mutations and exempts bearer', () => {
-    const dashboardOrigin = 'https://dash.jump.sh';
-    const auth = managementAuth({ token, dashboardOrigin });
-    const basic = `Basic ${Buffer.from(`${MANAGEMENT_USER}:${token}`).toString('base64')}`;
-
-    for (const headers of [
-      { authorization: basic },
-      { authorization: basic, origin: 'https://dash.jump.sh.evil.test' },
-      { authorization: basic, referer: 'https://dash.jump.sh.evil.test/projects/1' },
-      { authorization: basic, origin: 'https://evil.test', referer: 'https://dash.jump.sh/projects/1' },
-    ]) {
-      const { passed, response } = authenticate(auth, req(headers, { method: 'POST' }));
-      assert.equal(passed, false);
-      assert.equal(response.statusCode, 403);
-    }
-
-    assert.equal(authenticate(auth, req({ authorization: basic, origin: dashboardOrigin }, { method: 'POST' })).passed, true);
-    assert.equal(authenticate(auth, req({ authorization: basic, referer: `${dashboardOrigin}/projects/1` }, { method: 'POST' })).passed, true);
-    assert.equal(authenticate(auth, req({ authorization: `Bearer ${token}` }, { method: 'POST' })).passed, true);
   });
 });
 

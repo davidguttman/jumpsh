@@ -25,7 +25,7 @@ import { checkDockerAvailability } from './services/dockerCommand.js';
 import { enrichProjectStatus } from './lib/projectStatus.js';
 import { sortWorktreesByRecency } from './lib/worktree-recency.js';
 import { pruneWorktrees } from './lib/worktree-prune.js';
-import { ensureManagementToken, managementAuth } from './lib/management-auth.js';
+import { ensureManagementToken, managementAuth, managementRevocationsPath } from './lib/management-auth.js';
 import {
   autoStartDesiredProjects,
   restartProjectWithWorktrees,
@@ -112,7 +112,11 @@ const app = express();
 app.use(subdomainProxy.middleware());
 
 // Everything reaching Express is the exact configured dashboard host.
-app.use(managementAuth({ token: managementToken, dashboardOrigin: () => formatUrl(config.dashboardHost) }));
+app.use(managementAuth({
+  token: managementToken,
+  dashboardOrigin: () => formatUrl(config.dashboardHost),
+  revocationDir: managementRevocationsPath(),
+}));
 app.use(express.urlencoded({ extended: true, limit: '128kb' }));
 app.use(express.json({ limit: '128kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
