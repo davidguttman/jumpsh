@@ -59,6 +59,12 @@ jobs:
 
       - name: Test
         timeout-minutes: 15
+        env:
+          # Tests create temporary git repos with commits; the runner has no identity.
+          GIT_AUTHOR_NAME: CI
+          GIT_AUTHOR_EMAIL: ci@example.invalid
+          GIT_COMMITTER_NAME: CI
+          GIT_COMMITTER_EMAIL: ci@example.invalid
         run: node --test --test-force-exit test/*.test.js
 
       - name: Verify release metadata
