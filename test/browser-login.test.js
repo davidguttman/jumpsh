@@ -76,7 +76,7 @@ async function login(auth, { remember = false, now } = {}) {
 
 describe('browser token login', () => {
   it('redirects unauthenticated HTML navigation to the login page without a Basic challenge', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { passed, res } = await run(auth, { url: '/projects/1?tab=logs', headers: { accept: 'text/html,application/xhtml+xml' } });
     assert.equal(passed, false);
     assert.equal(res.statusCode, 303);
@@ -85,7 +85,7 @@ describe('browser token login', () => {
   });
 
   it('returns 401 without WWW-Authenticate for unauthenticated API, static, and EventSource requests', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     for (const [url, accept] of [
       ['/api/projects', 'application/json'],
       ['/api/projects', '*/*'],
@@ -100,7 +100,7 @@ describe('browser token login', () => {
   });
 
   it('no longer accepts Basic credentials', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const basic = `Basic ${Buffer.from(`jump:${token}`).toString('base64')}`;
     const { passed, res } = await run(auth, { url: '/api/projects', headers: { authorization: basic } });
     assert.equal(passed, false);
@@ -109,7 +109,7 @@ describe('browser token login', () => {
   });
 
   it('renders a styled Token / Remember this device / Connect page', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { passed, res } = await run(auth, { url: '/login?next=%2Fadd', headers: { accept: 'text/html' } });
     assert.equal(passed, false);
     assert.equal(res.statusCode, 200);
@@ -127,7 +127,7 @@ describe('browser token login', () => {
   });
 
   it('shows clear feedback for an invalid token and sets no cookie', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await run(auth, {
       method: 'POST', url: '/login', body: 'token=wrong&next=%2F',
       headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
@@ -140,7 +140,7 @@ describe('browser token login', () => {
   });
 
   it('issues a Secure HttpOnly host-only SameSite session cookie when remember is off', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await login(auth);
     assert.equal(res.statusCode, 303);
     assert.equal(res.headers.location, '/projects/1');
@@ -156,7 +156,7 @@ describe('browser token login', () => {
   });
 
   it('issues a bounded persistent cookie when remember is on', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await login(auth, { remember: true });
     const [cookie] = setCookies(res);
     const maxAge = Number(cookie.match(/; Max-Age=(\d+)/u)?.[1]);
@@ -165,7 +165,7 @@ describe('browser token login', () => {
   });
 
   it('authenticates navigation, API, and EventSource requests with the cookie', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const cookie = cookiePair((await login(auth)).res);
     for (const [url, accept] of [['/', 'text/html'], ['/api/projects', 'application/json'], ['/projects/1/logs/stream', 'text/event-stream']]) {
       const { passed, req } = await run(auth, { url, headers: { accept, cookie: `other=1; ${cookie}` } });
@@ -175,7 +175,7 @@ describe('browser token login', () => {
   });
 
   it('redirects an already-authenticated login page visit to next', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const cookie = cookiePair((await login(auth)).res);
     const { res } = await run(auth, { url: '/login?next=%2Fadd', headers: { cookie, accept: 'text/html' } });
     assert.equal(res.statusCode, 303);
@@ -183,7 +183,7 @@ describe('browser token login', () => {
   });
 
   it('rejects tampered, foreign, and wrong-transport cookies', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const cookie = cookiePair((await login(auth)).res);
     const value = cookie.slice(TLS_COOKIE.length + 1);
     const tampered = value.slice(0, -2) + (value.endsWith('AA') ? 'BB' : 'AA');
@@ -200,7 +200,7 @@ describe('browser token login', () => {
 
   it('expires cookies server-side even if the browser keeps them', async () => {
     let now = Date.parse('2026-10-01T00:00:00Z');
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
     const sessionCookie = cookiePair((await login(auth)).res);
     const rememberCookie = cookiePair((await login(auth, { remember: true })).res);
     now += 25 * 60 * 60 * 1000;
@@ -211,15 +211,15 @@ describe('browser token login', () => {
   });
 
   it('invalidates browser authentication when the token rotates', async () => {
-    const cookie = cookiePair((await login(managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin }))).res);
-    const rotated = managementAuth({ revocationPath: tmpRevocations(), token: 'rotated-management-token-that-is-long-enough', dashboardOrigin: origin });
+    const cookie = cookiePair((await login(managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin }))).res);
+    const rotated = managementAuth({ revocationDir: tmpRevocations(), token: 'rotated-management-token-that-is-long-enough', dashboardOrigin: origin });
     const { passed, res } = await run(rotated, { url: '/api/projects', headers: { cookie } });
     assert.equal(passed, false);
     assert.equal(res.statusCode, 401);
   });
 
   it('requires the exact configured Origin or Referer for login', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const body = `token=${token}`;
     for (const headers of [
       {},
@@ -238,7 +238,7 @@ describe('browser token login', () => {
   });
 
   it('requires the exact configured Origin or Referer for cookie-auth mutations and exempts bearer', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const cookie = cookiePair((await login(auth)).res);
     for (const headers of [
       { cookie },
@@ -259,7 +259,7 @@ describe('browser token login', () => {
   });
 
   it('logs out by clearing the cookie and revoking the session, with an origin check', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const cookie = cookiePair((await login(auth, { remember: true })).res);
 
     const crossSite = await run(auth, { method: 'POST', url: '/logout', headers: { cookie, origin: 'https://evil.test' } });
@@ -277,7 +277,7 @@ describe('browser token login', () => {
   });
 
   it('only redirects to safe same-origin relative paths after login', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     for (const next of ['https://evil.test/', '//evil.test/', '/\\evil.test', 'javascript:alert(1)', '/login', '']) {
       const body = new URLSearchParams({ token, next }).toString();
       const { res } = await run(auth, { method: 'POST', url: '/login', body, headers: { origin } });
@@ -286,14 +286,14 @@ describe('browser token login', () => {
   });
 
   it('escapes the next value in the login page', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await run(auth, { url: `/login?next=${encodeURIComponent('/"><script>x</script>')}` });
     assert.equal(res.body.includes('<script>x'), false);
   });
 
   it('uses a non-Secure host-only cookie only for direct loopback HTTP', async () => {
     const local = 'http://dash.jump.sh';
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: local });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: local });
     const { res } = await run(auth, {
       method: 'POST', url: '/login', body: `token=${token}`,
       headers: { origin: local }, encrypted: false, remoteAddress: '127.0.0.1',
@@ -310,7 +310,7 @@ describe('browser token login', () => {
   });
 
   it('rejects remote plaintext login before reading credentials', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'http://dash.jump.sh' });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'http://dash.jump.sh' });
     for (const url of ['/login', '/logout']) {
       const { res } = await run(auth, {
         method: url === '/login' ? 'GET' : 'POST', url,
@@ -327,7 +327,7 @@ describe('browser token login', () => {
   });
 
   it('rejects oversized login bodies', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await run(auth, { method: 'POST', url: '/login', body: `token=${'a'.repeat(20000)}`, headers: { origin } });
     assert.equal(res.statusCode, 413);
   });

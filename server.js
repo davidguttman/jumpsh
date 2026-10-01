@@ -115,7 +115,7 @@ app.use(subdomainProxy.middleware());
 app.use(managementAuth({
   token: managementToken,
   dashboardOrigin: () => formatUrl(config.dashboardHost),
-  revocationPath: managementRevocationsPath(),
+  revocationDir: managementRevocationsPath(),
 }));
 app.use(express.urlencoded({ extended: true, limit: '128kb' }));
 app.use(express.json({ limit: '128kb' }));

@@ -99,7 +99,7 @@ describe('management containment auth', () => {
   });
 
   it('denies unauthenticated API, static, log, SSE and mutation requests without a Basic challenge', () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
     for (const route of ['/api/projects', '/styles.css', '/projects/1/logs', '/projects/1/logs/stream', '/projects/1/startup', '/projects']) {
       const { passed, response } = authenticate(auth, req({}, { url: route, method: route === '/projects' ? 'POST' : 'GET' }));
       assert.equal(passed, false, route);
@@ -109,7 +109,7 @@ describe('management containment auth', () => {
   });
 
   it('accepts valid bearer credentials, and rejects bad or Basic credentials', () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'https://dash.jump.sh' });
     assert.equal(authenticate(auth, req({ authorization: `Bearer ${token}` })).passed, true);
 
     for (const authorization of [

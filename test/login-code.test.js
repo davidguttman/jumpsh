@@ -61,7 +61,7 @@ function exchange(auth, code, headers = { origin }, next = '/add?dir=%2Fsrc') {
 
 describe('single-use login codes', () => {
   it('issues a short-lived opaque code only to bearer-authenticated callers', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const res = await issue(auth);
     assert.equal(res.statusCode, 200);
     assert.match(res.body.code, /^[A-Za-z0-9_-]{43}$/u);
@@ -79,7 +79,7 @@ describe('single-use login codes', () => {
   });
 
   it('exchanges a code once for the same session cookie, then rejects replay', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { code } = (await issue(auth)).body;
 
     const first = await exchange(auth, code);
@@ -97,7 +97,7 @@ describe('single-use login codes', () => {
   });
 
   it('consumes atomically under concurrent exchanges', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { code } = (await issue(auth)).body;
     const results = await Promise.all([exchange(auth, code), exchange(auth, code), exchange(auth, code)]);
     assert.deepEqual(results.map(r => r.res.statusCode).sort(), [200, 401, 401]);
@@ -105,23 +105,23 @@ describe('single-use login codes', () => {
 
   it('rejects expired codes', async () => {
     let now = Date.parse('2026-10-01T00:00:00Z');
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
     const { code, expiresIn } = (await issue(auth)).body;
     now += expiresIn * 1000;
     assert.equal((await exchange(auth, code)).res.statusCode, 401);
   });
 
   it('rejects unknown codes and codes from another installation', async () => {
-    const other = managementAuth({ revocationPath: tmpRevocations(), token: 'another-management-token-that-is-long-enough', dashboardOrigin: origin });
+    const other = managementAuth({ revocationDir: tmpRevocations(), token: 'another-management-token-that-is-long-enough', dashboardOrigin: origin });
     const { code } = (await issue(other)).body;
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     for (const candidate of [code, 'A'.repeat(43), 'short', '']) {
       assert.equal((await exchange(auth, candidate)).res.statusCode, 401, candidate);
     }
   });
 
   it('requires the exact configured origin for exchange without consuming the code', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { code } = (await issue(auth)).body;
     for (const headers of [{}, { origin: 'https://evil.test' }, { origin: 'https://app.jump.sh' }, { referer: 'https://dash.jump.sh.evil.test/login' }]) {
       const { res } = await exchange(auth, code, headers);
@@ -133,7 +133,7 @@ describe('single-use login codes', () => {
 
   it('bounds outstanding codes and frees slots on expiry', async () => {
     let now = Date.parse('2026-10-01T00:00:00Z');
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin, now: () => now });
     let issued = 0;
     let res;
     while ((res = await issue(auth)).statusCode === 200) {
@@ -147,7 +147,7 @@ describe('single-use login codes', () => {
   });
 
   it('rejects remote plaintext issuance and exchange', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: 'http://dash.jump.sh' });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: 'http://dash.jump.sh' });
     const issueRes = await run(auth, { method: 'POST', url: '/api/login-codes', headers: { authorization: bearer }, encrypted: false });
     assert.equal(issueRes.res.statusCode, 403);
     const exchangeRes = await run(auth, { method: 'POST', url: '/login', body: 'code=x', headers: { origin: 'http://dash.jump.sh' }, encrypted: false });
@@ -155,7 +155,7 @@ describe('single-use login codes', () => {
   });
 
   it('drops any login-code fragment when redirecting an already signed-in browser', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { code } = (await issue(auth)).body;
     const cookie = (await exchange(auth, code)).res.headers['set-cookie'].split(';')[0];
     const { res } = await run(auth, { url: '/login?next=%2Fadd', headers: { cookie } });
@@ -165,7 +165,7 @@ describe('single-use login codes', () => {
   });
 
   it('login page strips the fragment before exchanging it via same-origin POST', async () => {
-    const auth = managementAuth({ revocationPath: tmpRevocations(), token, dashboardOrigin: origin });
+    const auth = managementAuth({ revocationDir: tmpRevocations(), token, dashboardOrigin: origin });
     const { res } = await run(auth, { url: '/login' });
     const script = res.body.match(/<script>([\s\S]*?)<\/script>/u)?.[1];
     assert.ok(script, 'login page has an inline exchange script');
