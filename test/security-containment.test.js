@@ -242,6 +242,8 @@ describe('CLI auth and port containment', () => {
       const compose = fs.readFileSync(overridePath, 'utf8');
       assert.match(compose, /ports: !override/u);
       assert.match(compose, /host_ip: 127\.0\.0\.1/u);
+      // User compose owns networking; the overlay must not override it.
+      assert.doesNotMatch(compose, /network_mode|networks:/u);
     } finally {
       if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome;
       fs.rmSync(home, { recursive: true, force: true });
