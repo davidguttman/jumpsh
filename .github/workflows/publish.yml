@@ -60,6 +60,8 @@ jobs:
       - name: Test
         timeout-minutes: 15
         env:
+          # Fixtures intentionally put generated Dockerfiles outside their build context.
+          BUILDX_BAKE_ENTITLEMENTS_FS: "0"
           # Tests create temporary git repos with commits; the runner has no identity.
           GIT_AUTHOR_NAME: CI
           GIT_AUTHOR_EMAIL: ci@example.invalid
