@@ -199,6 +199,16 @@ URLs use double-dash as separator: `my-project--feature-auth.jump.sh`
 - **Global daemon logs** — `~/.jump.sh/logs/daemon.log` and `daemon.err` (stdout/stderr from the daemon process)
 - **Per-project dev log** — `<project>/dev.log` (project-specific events: container start/stop/errors)
 
+## Troubleshooting
+
+### `all predefined address pools have been fully subnetted`
+
+Docker carves every Compose project network out of a small, finite set of address pools. Older jump.sh versions generated previews (static sites and the Node/PHP dependency-init services) that each created a `<project>_default` network, so enough running or stale previews exhausted the pools and new ones failed to start.
+
+Generated compose files now attach every service to the shared default bridge (`network_mode: bridge`) or to no network at all (`network_mode: none` for dependency-init services, which only copy and chown volumes), so previews no longer allocate subnets. User-provided `docker-compose.yml` files are left untouched; their networking is yours to manage.
+
+To recover after upgrading, cycle affected previews through jump.sh rather than Docker directly: `jump.sh restart <name>` (or **Stop** then **Start** in the dashboard) runs `docker compose down`, which removes the preview's old project network, and then regenerates its compose file.
+
 ## Architecture
 
 ```

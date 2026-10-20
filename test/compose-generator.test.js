@@ -313,7 +313,7 @@ describe('generateCompose Node projects', () => {
 
     assert.ok(compose.includes('      - app_node_modules:/app/node_modules'));
     assert.ok(compose.includes('    depends_on:\n      app_node_modules_init:\n        condition: service_completed_successfully'));
-    assert.ok(compose.includes('  app_node_modules_init:\n    user: "0:0"'));
+    assert.ok(compose.includes('  app_node_modules_init:\n    network_mode: none\n    user: "0:0"'));
     assert.ok(compose.includes('    entrypoint: []'));
     assert.ok(compose.includes('      - app_node_modules:/deps'));
     assert.ok(compose.includes(`    command: ["sh","-c","set -eu; find /deps -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; if [ -d /app/node_modules ]; then cp -a /app/node_modules/. /deps/; fi; chown -R ${uid}:${gid} /deps"]`));
@@ -379,7 +379,7 @@ describe('generateCompose PHP projects', () => {
     assert.ok(compose.includes('      - HOME=/tmp'));
     assert.ok(compose.includes('      - app_vendor:/app/vendor'));
     assert.ok(compose.includes('    depends_on:\n      app_vendor_init:\n        condition: service_completed_successfully'));
-    assert.ok(compose.includes('  app_vendor_init:\n    user: "0:0"'));
+    assert.ok(compose.includes('  app_vendor_init:\n    network_mode: none\n    user: "0:0"'));
     assert.ok(compose.includes('    entrypoint: []'));
     assert.ok(compose.includes('      - app_vendor:/deps'));
     assert.ok(compose.includes(`    command: ["sh","-c","set -eu; find /deps -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; if [ -d /app/vendor ]; then cp -a /app/vendor/. /deps/; fi; chown -R ${uid}:${gid} /deps"]`));
@@ -419,6 +419,56 @@ describe('generateCompose dependency initialization scope', () => {
       assert.ok(!compose.includes('depends_on:'));
       assert.ok(!compose.includes('_init:'));
       assert.ok(!compose.includes('\nvolumes:\n'));
+    });
+  }
+});
+
+function composeServiceBlock(compose, serviceName) {
+  const lines = compose.split('\n');
+  const start = lines.indexOf(`  ${serviceName}:`);
+  assert.notEqual(start, -1, `missing service ${serviceName}`);
+  const end = lines.findIndex((line, i) => i > start && /^ {0,2}\S/u.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
+describe('generateCompose network allocation', () => {
+  // Every generated service must opt out of Compose's per-project default
+  // network; otherwise each preview allocates a subnet from Docker's finite
+  // address pools and enough previews exhaust them.
+  const cases = [
+    { detection: { type: 'static', framework: null, devCommand: null, port: 80, dockerImage: 'nginx:alpine' }, services: { app: 'bridge' } },
+    { detection: { type: 'node', framework: null, devCommand: 'node index.js', port: 3000, packageManager: { name: 'npm', install: 'npm install', lockFile: null } }, services: { app: 'bridge', app_node_modules_init: 'none' } },
+    { detection: { type: 'php', framework: null, devCommand: 'php -S 0.0.0.0:8000', port: 8000, installCommand: 'composer install', dockerImage: 'php:8.3-cli' }, services: { app: 'bridge', app_vendor_init: 'none' } },
+    { detection: { type: 'python', framework: null, devCommand: 'python app.py', port: 8000, installCommand: 'pip install -r requirements.txt' }, services: { app: 'bridge' } },
+    { detection: { type: 'go', framework: null, devCommand: 'go run .', port: 8080 }, services: { app: 'bridge' } },
+    { detection: { type: 'ruby', framework: null, devCommand: 'bundle exec ruby app.rb', port: 4567, installCommand: 'bundle install' }, services: { app: 'bridge' } },
+  ];
+
+  for (const { detection, services } of cases) {
+    it(`sets network_mode on every ${detection.type} service and declares no networks`, () => {
+      if (detection.type === 'node') writeJson(projectDir, 'package.json', { dependencies: {} });
+      const result = generateCompose(projectDir, `test-net-${detection.type}`, detection, 10000, { force: true });
+      const compose = fs.readFileSync(result.composePath, 'utf8');
+
+      for (const [name, mode] of Object.entries(services)) {
+        const block = composeServiceBlock(compose, name);
+        assert.ok(block.includes(`\n    network_mode: ${mode}\n`), `${name} should use network_mode: ${mode}`);
+        assert.ok(!block.includes('\n    networks:'), `${name} should not join Compose networks`);
+      }
+      assert.ok(!/^networks:/mu.test(compose));
+    });
+
+    it(`resolves ${detection.type} compose without a project default network`, { skip: !dockerComposeAvailable }, () => {
+      if (detection.type === 'node') writeJson(projectDir, 'package.json', { dependencies: {} });
+      const result = generateCompose(projectDir, `test-net-config-${detection.type}`, detection, 10000, { force: true });
+      const config = readComposeConfig(result.composePath, `jump-sh-net-${detection.type}-${process.pid}`);
+
+      assert.deepEqual(Object.keys(config.services).sort(), Object.keys(services).sort());
+      for (const [name, mode] of Object.entries(services)) {
+        assert.equal(config.services[name].network_mode, mode);
+        assert.equal(config.services[name].networks, undefined);
+      }
+      assert.deepEqual(config.networks ?? {}, {});
     });
   }
 });
