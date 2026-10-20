@@ -207,7 +207,7 @@ Docker carves every Compose project network out of a small, finite set of addres
 
 Generated compose files now attach every service to the shared default bridge (`network_mode: bridge`) or to no network at all (`network_mode: none` for dependency-init services, which only copy and chown volumes), so previews no longer allocate subnets. User-provided `docker-compose.yml` files are left untouched; their networking is yours to manage.
 
-To recover after upgrading, cycle affected previews through jump.sh rather than Docker directly: `jump.sh restart <name>` (or **Stop** then **Start** in the dashboard) runs `docker compose down`, which removes the preview's old project network, and then regenerates its compose file.
+To recover after upgrading, stop old previews through jump.sh (`jump.sh stop <name>`, `jump.sh restart <name>`, or **Stop** in the dashboard) before their first start under the upgraded generator. That stop runs `docker compose down` against the old generated file, which still declares the preview's default network, so the network is removed; the next start then regenerates the file. If a preview was already started under the upgraded generator while its old network still existed, the refreshed file no longer declares that network and later stops will not remove it: that orphaned `<project>_default` network needs a separate one-time cleanup.
 
 ## Architecture
 
