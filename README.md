@@ -205,9 +205,17 @@ URLs use double-dash as separator: `my-project--feature-auth.jump.sh`
 
 Docker carves every Compose project network out of a small, finite set of address pools. Older jump.sh versions generated previews (static sites and the Node/PHP dependency-init services) that each created a `<project>_default` network, so enough running or stale previews exhausted the pools and new ones failed to start.
 
-Generated compose files now attach every service to the shared default bridge (`network_mode: bridge`) or to no network at all (`network_mode: none` for dependency-init services, which only copy and chown volumes), so previews no longer allocate subnets. User-provided `docker-compose.yml` files are left untouched; their networking is yours to manage.
+Generated compose files now attach every service to the shared default bridge (`network_mode: bridge`) or to no network at all (`network_mode: none` for dependency-init services, which only copy and chown volumes), so previews no longer allocate subnets.
 
-To recover after upgrading, stop old previews through jump.sh (`jump.sh stop <name>`, `jump.sh restart <name>`, or **Stop** in the dashboard) before their first start under the upgraded generator. That stop runs `docker compose down` against the old generated file, which still declares the preview's default network, so the network is removed; the next start then regenerates the file. If a preview was already started under the upgraded generator while its old network still existed, the refreshed file no longer declares that network and later stops will not remove it: that orphaned `<project>_default` network needs a separate one-time cleanup.
+User-provided `docker-compose.yml` files are never edited. When jump.sh layers its runtime override (`~/.jump.sh/<slug>/docker-compose.jump.yml`, written for worktree previews and for main projects that do not publish host ports), it also sets `network_mode: bridge` on the service **only** if all of these hold:
+
+- the compose file resolves to exactly one service, attached to nothing but Compose's unconfigured implicit `default` network;
+- the file text never mentions `networks`, `network_mode`, `include`, `extends`, `profiles`, `links`, or `external_links`;
+- the file text contains no backslash (`\`), `&`, `*`, or `!` characters. This conservative exclusion avoids changing explicit networking hidden by YAML escapes, anchors, aliases, or tags, even when those characters occur in comments or unrelated values.
+
+So a file like `services: { app: { image: …, expose: ["8080"], volumes: [./public:/usr/share/nginx/html] } }` reuses the shared bridge, while explicit networking (including an explicit `networks: [default]` or a customized top-level `default` network), any custom `network_mode`, and multi-service files (which rely on service-name DNS and per-project isolation) keep their own networking. Main projects whose compose file already publishes host ports run as-is with no override and are not changed.
+
+To recover after upgrading, stop old previews through jump.sh (`jump.sh stop <name>`, `jump.sh restart <name>`, or **Stop** in the dashboard) before their first start under the upgraded generator. That stop runs `docker compose down` against the old generated file, which still declares the preview's default network, so the network is removed; the next start then regenerates the file. If a preview was already started under the upgraded generator while its old network still existed, the refreshed file no longer declares that network and later stops will not remove it: that orphaned `<project>_default` network needs a separate one-time cleanup. The same applies to eligible user-compose previews: their runtime override is rewritten on start, so stop them once before the first start under the upgraded version.
 
 ## Architecture
 
